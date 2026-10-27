@@ -1,0 +1,29 @@
+{
+  "source": {
+    "url": "https://godelivery.co.th/",
+    "retrieved_on": "2026-10-27",
+    "verification_note": "Extracted from public page structured data. It is not independently verified. Aggregate prices, stock, health claims, and unconfirmed offers are intentionally excluded."
+  },
+  "products": [
+    {
+      "id": "godelivery-1",
+      "name": "ALLDAY น้ำมันงาดำสกัดเย็น ผสมคอลลาเจน ไทพ์ ทู (Hi.P.Herb Official)",
+      "aliases": [],
+      "brand_as_listed": "Hi.P.Herb (ไฮพีเฮิร์บ)",
+      "product_type_as_listed": "อาหารเสริมสุขภาพ > น้ำมันงาดำสกัดเย็น > บำรุงกระดูกและข้อ",
+      "ingredients_as_listed": [
+        "น้ำมันงาดำสกัดเย็น",
+        "คอลลาเจนไทพ์ทู (Type II collagen)"
+      ],
+      "short_description": "ชื่อและข้อมูลนี้คัดจาก structured data บนหน้าเว็บ; ยังไม่ได้ยืนยันกับผู้ขาย",
+      "regular_price_thb": null,
+      "promotion_price_thb": null,
+      "promotion": null,
+      "stock_status": "unknown",
+      "sales_script": "จากข้อมูลที่หน้าเว็บไซต์แสดง มีรายการ ALLDAY น้ำมันงาดำสกัดเย็น ผสมคอลลาเจน ไทพ์ ทู (Hi.P.Herb Official) ค่ะ ขณะนี้ยังไม่มีราคาหรือโปรโมชันที่ยืนยันได้ ต้องการให้ช่วยตรวจสอบกับร้านค้าก่อนไหมคะ",
+      "source_url": "https://godelivery.co.th/",
+      "source_type": "public_page_structured_data",
+      "verified": false
+    }
+  ]
+}

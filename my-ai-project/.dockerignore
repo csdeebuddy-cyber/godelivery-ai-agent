@@ -1,0 +1,8 @@
+.env
+.git
+.gitignore
+.dockerignore
+venv/
+__pycache__/
+*.py[cod]
+config/google_credentials.json
