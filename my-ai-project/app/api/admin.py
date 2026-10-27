@@ -6,14 +6,21 @@ from typing import Any
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Header, HTTPException, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
+from google.api_core.exceptions import GoogleAPIError
+from google.auth.exceptions import GoogleAuthError
 from google.auth import exceptions as google_auth_exceptions
 from google.auth.transport.requests import Request as GoogleAuthRequest
 from google.oauth2 import id_token
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from app.config import settings
+from app.schemas.admin import GoogleSheetsSettings
+from app.services.admin_settings import (
+    get_google_sheets_settings,
+    save_google_sheets_settings,
+)
 from app.services.knowledge_base import get_knowledge_base_status
 
 
@@ -78,6 +85,26 @@ def _require_admin(request: Request) -> str:
     if email is None:
         raise HTTPException(status_code=401, detail="Admin authentication required.")
     return email
+
+
+def _require_csrf(request: Request, csrf_token: str | None) -> None:
+    signed_session = request.cookies.get(ADMIN_SESSION_COOKIE)
+    if not signed_session or not settings.ADMIN_SESSION_SECRET:
+        raise HTTPException(status_code=401, detail="Admin authentication required.")
+    try:
+        session = _session_signer().loads(
+            signed_session,
+            max_age=SESSION_MAX_AGE_SECONDS,
+        )
+    except (BadSignature, SignatureExpired, HTTPException) as exc:
+        raise HTTPException(status_code=401, detail="Admin authentication required.") from exc
+    expected_token = session.get("csrf_token") if isinstance(session, dict) else None
+    if (
+        not isinstance(expected_token, str)
+        or not isinstance(csrf_token, str)
+        or not secrets.compare_digest(expected_token, csrf_token)
+    ):
+        raise HTTPException(status_code=403, detail="Invalid CSRF token.")
 
 
 def _set_auth_cookies(response: Response, signed_session: str) -> None:
@@ -227,7 +254,10 @@ async def google_oauth_callback(
     ):
         return RedirectResponse("/dashboard/admin/login?error=not_authorized", status_code=303)
 
-    signed_session = _session_signer().dumps({"email": ALLOWED_ADMIN_EMAIL})
+    csrf_token = secrets.token_urlsafe(32)
+    signed_session = _session_signer().dumps(
+        {"email": ALLOWED_ADMIN_EMAIL, "csrf_token": csrf_token}
+    )
     response = RedirectResponse("/dashboard/admin", status_code=303)
     _set_auth_cookies(response, signed_session)
     return response
@@ -248,14 +278,16 @@ async def admin_logout() -> Response:
 
 @api_router.get("/status")
 async def admin_status(request: Request) -> dict[str, Any]:
+    firestore_configured = bool(settings.FIRESTORE_PROJECT_ID)
     return {
         "authenticated": _admin_email_from_cookie(request) is not None,
         "sso_configured": _oauth_ready(),
         "allowed_admin_email": ALLOWED_ADMIN_EMAIL,
+        "gemini_api_key_configured": bool(settings.GEMINI_API_KEY),
         "storage": {
             "provider": "firestore",
-            "status": "not_connected",
-            "configured": False,
+            "status": "configured" if firestore_configured else "not_configured",
+            "configured": firestore_configured,
             "editing_enabled": False,
         },
     }
@@ -270,15 +302,77 @@ async def admin_overview(request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {
         "admin_email": email,
+        "csrf_token": _session_csrf_token(request),
+        "gemini_api_key_configured": bool(settings.GEMINI_API_KEY),
         "knowledge_base": knowledge_status,
         "storage": {
             "provider": "firestore",
-            "status": "not_connected",
-            "configured": False,
+            "status": "configured" if settings.FIRESTORE_PROJECT_ID else "not_configured",
+            "configured": bool(settings.FIRESTORE_PROJECT_ID),
             "editing_enabled": False,
         },
-        "message": (
-            "Admin sign-in is active. Editing is disabled until Firestore is "
-            "connected with persistent storage."
-        ),
+        "message": "Spreadsheet settings can be stored in Firestore; sync and catalog editing are not connected."
+        if settings.FIRESTORE_PROJECT_ID
+        else "Spreadsheet settings cannot be saved until Firestore and the Cloud Run service account are configured.",
+    }
+
+
+def _session_csrf_token(request: Request) -> str:
+    signed_session = request.cookies.get(ADMIN_SESSION_COOKIE)
+    if not signed_session:
+        raise HTTPException(status_code=401, detail="Admin authentication required.")
+    try:
+        session = _session_signer().loads(
+            signed_session,
+            max_age=SESSION_MAX_AGE_SECONDS,
+        )
+    except (BadSignature, SignatureExpired, HTTPException) as exc:
+        raise HTTPException(status_code=401, detail="Admin authentication required.") from exc
+    csrf_token = session.get("csrf_token") if isinstance(session, dict) else None
+    if not isinstance(csrf_token, str):
+        raise HTTPException(status_code=401, detail="Admin session is missing CSRF protection.")
+    return csrf_token
+
+
+@api_router.get("/settings/google-sheets")
+def read_google_sheets_settings(request: Request) -> dict[str, Any]:
+    _require_admin(request)
+    try:
+        return get_google_sheets_settings()
+    except (RuntimeError, GoogleAPIError, GoogleAuthError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "firestore_unavailable",
+                "message": "Google Sheets settings are not available because Firestore is not configured or reachable.",
+            },
+        ) from exc
+
+
+@api_router.put("/settings/google-sheets")
+def update_google_sheets_settings(
+    request: Request,
+    configuration: GoogleSheetsSettings,
+    csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+) -> dict[str, Any]:
+    admin_email = _require_admin(request)
+    _require_csrf(request, csrf_token)
+    try:
+        saved = save_google_sheets_settings(
+            spreadsheet_id=configuration.spreadsheet_id,
+            range_name=configuration.range,
+            updated_by=admin_email,
+        )
+    except (RuntimeError, GoogleAPIError, GoogleAuthError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "firestore_unavailable",
+                "message": "Settings were not saved because Firestore is not configured or reachable.",
+            },
+        ) from exc
+    return {
+        "status": "saved",
+        "settings": saved,
+        "message": "Spreadsheet settings saved to Firestore. Data sync is not enabled yet.",
     }

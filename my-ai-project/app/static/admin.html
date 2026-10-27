@@ -51,6 +51,12 @@
         <p id="promotion-count" class="status-value">—</p>
         <p class="muted">ระบบจะแสดงเฉพาะรายการที่ active ในคลังข้อมูล</p>
       </article>
+      <article class="status-card">
+        <span class="card-icon">🔑</span>
+        <h2>Gemini API Key</h2>
+        <p id="gemini-key-state" class="status-value">กำลังตรวจสอบ…</p>
+        <p class="muted">แสดงเฉพาะสถานะ ไม่แสดงค่าคีย์</p>
+      </article>
     </section>
 
     <section class="management-panel">
@@ -64,8 +70,42 @@
         <a class="secondary-button" href="/api/v1/knowledge/promotions" target="_blank" rel="noopener">ดูโปรโมชั่น</a>
       </div>
       <div class="notice notice-warning">
-        การแก้ไขและบันทึกข้อมูลยังปิดอยู่จนกว่าจะเชื่อม Firestore แบบถาวร เพื่อป้องกันข้อมูลสูญหายหรือแสดงว่าเผยแพร่แล้วทั้งที่ยังไม่ได้บันทึก
+        การแก้ไขสินค้า/โปรโมชั่นและการเผยแพร่ยังไม่เปิดใช้งาน ส่วนฟอร์ม Google Sheets ด้านล่างบันทึกได้เฉพาะค่า Spreadsheet ID และช่วงข้อมูลเท่านั้น
       </div>
+    </section>
+
+    <section class="management-panel settings-panel">
+      <div>
+        <div class="eyebrow">GOOGLE SHEETS</div>
+        <h2>ตั้งค่าชีตสินค้า</h2>
+        <p class="muted">กรอกเฉพาะ Spreadsheet ID และช่วงข้อมูล ค่าจะถูกเก็บใน Firestore</p>
+      </div>
+      <form id="sheets-settings-form" class="settings-form">
+        <label for="spreadsheet-id">Spreadsheet ID</label>
+        <input id="spreadsheet-id" name="spreadsheet_id" type="text" maxlength="200" placeholder="ID จาก URL ของ Google Sheet" required>
+        <label for="sheet-range">ช่วงข้อมูล (A1 notation)</label>
+        <input id="sheet-range" name="range" type="text" maxlength="200" value="Products!A2:E" required>
+        <p id="sheets-settings-state" class="muted" role="status">กำลังโหลดการตั้งค่า…</p>
+        <button id="save-sheets-settings" class="primary-button" type="submit" disabled>บันทึกการตั้งค่า</button>
+      </form>
+      <div class="notice notice-warning">
+        บัญชี Cloud Run ต้องมีสิทธิ์ Firestore และ Google Sheets API พร้อมกับถูกแชร์เข้าถึงไฟล์ชีตนั้น การบันทึกค่าชีตยังไม่เริ่มอ่านชีต ซิงก์ หรือแก้ไขแค็ตตาล็อก
+      </div>
+    </section>
+
+    <section class="management-panel secret-panel">
+      <div>
+        <div class="eyebrow">SECRET MANAGER</div>
+        <h2>ตั้งค่า Gemini API Key</h2>
+        <p class="muted">เพื่อความปลอดภัย ไม่รับหรือแสดง API key ในหน้าเว็บนี้</p>
+      </div>
+      <ol>
+        <li>เปิด Google Cloud Console → Secret Manager</li>
+        <li>สร้างหรืออัปเดต secret ชื่อ <code>GEMINI_API_KEY</code></li>
+        <li>ผูก secret เป็น environment variable ชื่อเดียวกันใน Cloud Run service</li>
+        <li>สร้าง revision/deploy ใหม่ แล้วกลับมาตรวจสถานะด้านบน</li>
+      </ol>
+      <div class="notice notice-warning">ห้ามใส่ key ใน Firestore, GitHub, ช่องแชต หรือไฟล์ frontend</div>
     </section>
 
     <section class="quick-links">

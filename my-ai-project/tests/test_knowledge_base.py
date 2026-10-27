@@ -4,6 +4,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.api import admin as admin_api
 from app.api.admin import _session_signer
 from app.config import settings
 from app.api.v1.endpoints.live import _live_config
@@ -47,14 +48,18 @@ class KnowledgeBaseTests(unittest.TestCase):
         test_secret = "test-admin-session-secret-at-least-32-characters"
 
         with patch.object(settings, "ADMIN_SESSION_SECRET", test_secret):
-            allowed_cookie = _session_signer().dumps({"email": "smpmfast@gmail.com"})
+            allowed_cookie = _session_signer().dumps(
+                {"email": "smpmfast@gmail.com", "csrf_token": "test-csrf-token"}
+            )
             client.cookies.set("godelivery_admin_session", allowed_cookie)
             overview_response = client.get("/api/v1/admin/overview")
             self.assertEqual(overview_response.status_code, 200)
             self.assertEqual(overview_response.json()["admin_email"], "smpmfast@gmail.com")
             self.assertFalse(overview_response.json()["storage"]["editing_enabled"])
 
-            other_user_cookie = _session_signer().dumps({"email": "other@example.com"})
+            other_user_cookie = _session_signer().dumps(
+                {"email": "other@example.com", "csrf_token": "test-csrf-token"}
+            )
             client.cookies.set("godelivery_admin_session", other_user_cookie)
             denied_response = client.get("/api/v1/admin/overview")
             self.assertEqual(denied_response.status_code, 401)
@@ -90,6 +95,79 @@ class KnowledgeBaseTests(unittest.TestCase):
         self.assertIn("code_challenge_method=S256", response.headers["location"])
         self.assertIn("code_challenge=", response.headers["location"])
         self.assertIn("godelivery_admin_oauth_state", response.headers["set-cookie"])
+
+    def test_sheets_settings_are_admin_only_csrf_protected_and_saved_to_firestore(self) -> None:
+        client = TestClient(app)
+        test_secret = "test-admin-session-secret-at-least-32-characters"
+        payload = {
+            "spreadsheet_id": "1Abcdefghijklmnopqrstuvwxyz0123456789",
+            "range": "Products!A2:E",
+        }
+
+        with patch.object(settings, "ADMIN_SESSION_SECRET", test_secret):
+            signed_cookie = _session_signer().dumps(
+                {"email": "smpmfast@gmail.com", "csrf_token": "csrf-allowed"}
+            )
+            client.cookies.clear()
+            unauthorized = client.put(
+                "/api/v1/admin/settings/google-sheets",
+                json=payload,
+                headers={"X-CSRF-Token": "csrf-allowed"},
+            )
+            client.cookies.set("godelivery_admin_session", signed_cookie)
+            invalid_csrf = client.put(
+                "/api/v1/admin/settings/google-sheets",
+                json=payload,
+                headers={"X-CSRF-Token": "wrong-token"},
+            )
+            with patch.object(
+                admin_api,
+                "save_google_sheets_settings",
+                return_value={
+                    "configured": True,
+                    "spreadsheet_id": payload["spreadsheet_id"],
+                    "range": payload["range"],
+                },
+            ) as save_settings:
+                saved = client.put(
+                    "/api/v1/admin/settings/google-sheets",
+                    json=payload,
+                    headers={"X-CSRF-Token": "csrf-allowed"},
+                )
+
+        self.assertEqual(unauthorized.status_code, 401)
+        self.assertEqual(invalid_csrf.status_code, 403)
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json()["status"], "saved")
+        self.assertIn("not enabled yet", saved.json()["message"])
+        save_settings.assert_called_once_with(
+            spreadsheet_id=payload["spreadsheet_id"],
+            range_name=payload["range"],
+            updated_by="smpmfast@gmail.com",
+        )
+
+    def test_sheets_settings_validate_input_and_return_unavailable_if_firestore_missing(self) -> None:
+        client = TestClient(app)
+        test_secret = "test-admin-session-secret-at-least-32-characters"
+
+        with (
+            patch.object(settings, "ADMIN_SESSION_SECRET", test_secret),
+            patch.object(settings, "FIRESTORE_PROJECT_ID", None),
+        ):
+            signed_cookie = _session_signer().dumps(
+                {"email": "smpmfast@gmail.com", "csrf_token": "csrf-allowed"}
+            )
+            client.cookies.set("godelivery_admin_session", signed_cookie)
+            invalid_payload = client.put(
+                "/api/v1/admin/settings/google-sheets",
+                json={"spreadsheet_id": "x", "range": "Products!A2:E"},
+                headers={"X-CSRF-Token": "csrf-allowed"},
+            )
+            unavailable = client.get("/api/v1/admin/settings/google-sheets")
+
+        self.assertEqual(invalid_payload.status_code, 422)
+        self.assertEqual(unavailable.status_code, 503)
+        self.assertEqual(unavailable.json()["detail"]["code"], "firestore_unavailable")
 
     def test_status_reports_unverified_catalog_and_no_active_promotions(self) -> None:
         status = get_knowledge_base_status()

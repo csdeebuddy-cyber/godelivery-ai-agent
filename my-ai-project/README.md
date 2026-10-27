@@ -21,10 +21,13 @@ FastAPI chat application with a Gemini Live real-time voice session and browser 
 - Admin login/dashboard: `https://sesame.godelivery.co.th/dashboard/admin`; the admin link is also available on the voice page.
 - Google sign-in is restricted server-side to the verified account `smpmfast@gmail.com`.
 - OAuth configuration is not included. Set `ADMIN_GOOGLE_CLIENT_ID`, `ADMIN_GOOGLE_CLIENT_SECRET`, `ADMIN_OAUTH_REDIRECT_URI`, and a strong random `ADMIN_SESSION_SECRET` (at least 32 characters) using Secret Manager in production. Never commit these values.
+- Set the Gemini key as a Secret Manager secret named `GEMINI_API_KEY`, then bind it to the Cloud Run service as the `GEMINI_API_KEY` environment variable. The admin page shows only whether the variable is present; it never accepts or returns the key. After changing a secret, deploy a new Cloud Run revision so the running app loads it.
 - Register the exact redirect URI `https://sesame.godelivery.co.th/admin/auth/google/callback` in the Google OAuth client, and use the matching deployed domain. For local testing, register a separate localhost redirect URI and set it in `.env`.
 - The OAuth authorization-code flow uses signed state, PKCE, verified Google ID tokens, an exact email allowlist, and an HttpOnly session cookie.
 - `GET /api/v1/admin/status` reports whether SSO is configured. `GET /api/v1/admin/overview` is protected by the signed admin session.
-- The dashboard is read-only for now. Firestore is the intended future persistent store, but it is not connected; editing and publish controls are therefore disabled/not implemented. The current preview endpoints do not save data.
+- The dashboard can store the non-secret Google Sheets Spreadsheet ID and range in Firestore through `PUT /api/v1/admin/settings/google-sheets`. Configure `FIRESTORE_PROJECT_ID` and grant the Cloud Run service account Firestore access first. This stores configuration only; it does not read the sheet, sync data, or update the catalog. The current preview endpoints do not save product or promotion data.
+- For Google Sheets, use the Cloud Run service account identity (Application Default Credentials), enable the Google Sheets API, and share the spreadsheet with that service account with Viewer access. Do not upload a service-account JSON key through the admin page.
+- In Google Cloud, create the Firestore database and grant the Cloud Run runtime service account the minimum Firestore permissions needed to read/write the `admin_settings` document. Also grant it access to the Google Sheets API; then set `FIRESTORE_PROJECT_ID` in the Cloud Run service. The sheet settings form will remain unavailable until this is configured and reachable.
 - This initial scaffold does not configure Google Cloud domain mapping, OAuth consent-screen settings, Firestore, or Cloud Run secrets. Complete those deployment settings before enabling admin sign-in.
 
 ## Search indexing
