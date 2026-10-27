@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     GEMINI_LIVE_MAX_CONTEXT_TOKENS: int = 104857
     GEMINI_LIVE_TARGET_CONTEXT_TOKENS: int = 52428
     GEMINI_LIVE_MEDIA_RESOLUTION: str = "MEDIA_RESOLUTION_MEDIUM"
+    ADMIN_GOOGLE_CLIENT_ID: str | None = None
+    ADMIN_GOOGLE_CLIENT_SECRET: str | None = None
+    ADMIN_OAUTH_REDIRECT_URI: str | None = None
+    ADMIN_SESSION_SECRET: str | None = None
     HOST: str = "0.0.0.0"
     PORT: int = 8000
 

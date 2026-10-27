@@ -15,6 +15,22 @@ FastAPI chat application with a Gemini Live real-time voice session and browser 
 4. Open `http://127.0.0.1:8000`.
 5. Press the microphone button and allow microphone access for real-time voice, or send a text message to receive a spoken Live response.
 
+## Admin dashboard and Google SSO
+
+- Customer voice page: `https://sesame.godelivery.co.th/chatandshop` after the custom domain is mapped (the service root redirects to `/chatandshop`).
+- Admin login/dashboard: `https://sesame.godelivery.co.th/dashboard/admin`; the admin link is also available on the voice page.
+- Google sign-in is restricted server-side to the verified account `smpmfast@gmail.com`.
+- OAuth configuration is not included. Set `ADMIN_GOOGLE_CLIENT_ID`, `ADMIN_GOOGLE_CLIENT_SECRET`, `ADMIN_OAUTH_REDIRECT_URI`, and a strong random `ADMIN_SESSION_SECRET` (at least 32 characters) using Secret Manager in production. Never commit these values.
+- Register the exact redirect URI `https://sesame.godelivery.co.th/admin/auth/google/callback` in the Google OAuth client, and use the matching deployed domain. For local testing, register a separate localhost redirect URI and set it in `.env`.
+- The OAuth authorization-code flow uses signed state, PKCE, verified Google ID tokens, an exact email allowlist, and an HttpOnly session cookie.
+- `GET /api/v1/admin/status` reports whether SSO is configured. `GET /api/v1/admin/overview` is protected by the signed admin session.
+- The dashboard is read-only for now. Firestore is the intended future persistent store, but it is not connected; editing and publish controls are therefore disabled/not implemented. The current preview endpoints do not save data.
+- This initial scaffold does not configure Google Cloud domain mapping, OAuth consent-screen settings, Firestore, or Cloud Run secrets. Complete those deployment settings before enabling admin sign-in.
+
+## Search indexing
+
+The customer and admin pages, as well as API responses, send `noindex` directives using HTML metadata and the `X-Robots-Tag` response header. `robots.txt` allows crawlers to fetch the pages so they can read and honor the `noindex` directive; blocking crawling alone can leave URLs visible in search results. This is not access control—the admin dashboard still requires server-side authentication. After deployment, verify the live URLs in Google Search Console; if a URL was already indexed, request temporary removal there while Google recrawls the `noindex` response.
+
 ## Gemini Live settings
 
 The defaults match the requested AI Studio settings:

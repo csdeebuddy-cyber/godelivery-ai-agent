@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f4ff">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+  <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet">
+  <title>Admin Dashboard · AI Voice Allday</title>
+  <link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+  <main class="admin-shell">
+    <header class="admin-topbar">
+      <a class="brand" href="/dashboard/admin">
+        <span class="brand-mark" aria-hidden="true">✦</span>
+        <span>AI Voice <strong>Allday</strong></span>
+      </a>
+      <div class="topbar-actions">
+        <span id="admin-email" class="admin-identity">กำลังโหลดบัญชี…</span>
+        <form action="/admin/auth/logout" method="post">
+          <button class="secondary-button" type="submit">ออกจากระบบ</button>
+        </form>
+      </div>
+    </header>
+
+    <section class="dashboard-heading">
+      <div class="eyebrow">ADMIN CONSOLE</div>
+      <h1>จัดการระบบ AI Voice</h1>
+      <p class="muted">ตรวจสอบความพร้อมของระบบและคลังข้อมูล</p>
+    </section>
+
+    <div id="dashboard-error" class="notice notice-error" role="alert" hidden></div>
+
+    <section class="status-grid" aria-label="สถานะระบบ">
+      <article class="status-card">
+        <span class="card-icon">◉</span>
+        <h2>Knowledge Base</h2>
+        <p id="kb-state" class="status-value">กำลังโหลด…</p>
+        <p id="kb-detail" class="muted"></p>
+      </article>
+      <article class="status-card">
+        <span class="card-icon">▤</span>
+        <h2>สินค้า</h2>
+        <p id="product-count" class="status-value">—</p>
+        <p id="verified-count" class="muted"></p>
+      </article>
+      <article class="status-card">
+        <span class="card-icon">％</span>
+        <h2>โปรโมชั่นที่ยืนยันแล้ว</h2>
+        <p id="promotion-count" class="status-value">—</p>
+        <p class="muted">ระบบจะแสดงเฉพาะรายการที่ active ในคลังข้อมูล</p>
+      </article>
+    </section>
+
+    <section class="management-panel">
+      <div>
+        <div class="eyebrow">DATA MANAGEMENT</div>
+        <h2>การจัดการข้อมูล</h2>
+        <p id="storage-message" class="muted">กำลังตรวจสอบที่จัดเก็บ…</p>
+      </div>
+      <div class="management-actions">
+        <a class="secondary-button" href="/api/v1/knowledge/products" target="_blank" rel="noopener">ดูข้อมูลสินค้า</a>
+        <a class="secondary-button" href="/api/v1/knowledge/promotions" target="_blank" rel="noopener">ดูโปรโมชั่น</a>
+      </div>
+      <div class="notice notice-warning">
+        การแก้ไขและบันทึกข้อมูลยังปิดอยู่จนกว่าจะเชื่อม Firestore แบบถาวร เพื่อป้องกันข้อมูลสูญหายหรือแสดงว่าเผยแพร่แล้วทั้งที่ยังไม่ได้บันทึก
+      </div>
+    </section>
+
+    <section class="quick-links">
+      <a href="/chatandshop">เปิดหน้า AI Voice Agent →</a>
+      <a href="/docs">ดู API docs →</a>
+    </section>
+    <footer>ผู้ดูแลที่อนุญาต: smpmfast@gmail.com</footer>
+  </main>
+  <script src="/static/admin.js" defer></script>
+</body>
+</html>

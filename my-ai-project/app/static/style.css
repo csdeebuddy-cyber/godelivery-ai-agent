@@ -77,6 +77,10 @@ button { cursor: pointer; }
   font-size: 12px;
 }
 
+.topbar-links { display: flex; align-items: center; gap: 16px; }
+.topbar-links > a { color: #7562ba; text-decoration: none; font-size: 12px; }
+.topbar-links > a:hover { text-decoration: underline; }
+
 .connection-dot {
   width: 8px;
   height: 8px;
@@ -159,6 +163,7 @@ footer a:hover { text-decoration: underline; }
 
 @media (max-width: 600px) {
   .topbar { height: 68px; }
+  .topbar-links { gap: 9px; }
   .chat-card { min-height: min(720px, calc(100vh - 112px)); margin: 12px auto 15px; padding: 32px 19px 19px; border-radius: 20px; }
   .conversation { min-height: 170px; margin-top: 24px; }
   .voice-controls { flex-wrap: wrap; }

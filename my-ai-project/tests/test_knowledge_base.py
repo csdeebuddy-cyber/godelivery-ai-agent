@@ -1,8 +1,11 @@
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.api.admin import _session_signer
+from app.config import settings
 from app.api.v1.endpoints.live import _live_config
 from app.services.knowledge_base import (
     get_knowledge_base_context,
@@ -12,6 +15,82 @@ from app.services.knowledge_base import (
 
 
 class KnowledgeBaseTests(unittest.TestCase):
+    def test_customer_and_admin_routes_are_available(self) -> None:
+        client = TestClient(app)
+
+        root_response = client.get("/", follow_redirects=False)
+        chat_response = client.get("/chatandshop")
+        login_response = client.get("/dashboard/admin/login")
+        admin_response = client.get("/dashboard/admin", follow_redirects=False)
+        api_response = client.get("/api/v1/admin/status")
+        robots_response = client.get("/robots.txt")
+
+        self.assertEqual(root_response.status_code, 307)
+        self.assertEqual(root_response.headers["location"], "/chatandshop")
+        self.assertIn("noindex", root_response.headers["x-robots-tag"])
+        self.assertEqual(chat_response.status_code, 200)
+        self.assertIn("/dashboard/admin", chat_response.text)
+        self.assertIn('name="googlebot" content="noindex', chat_response.text)
+        self.assertEqual(login_response.status_code, 200)
+        self.assertIn("smpmfast@gmail.com", login_response.text)
+        self.assertIn('name="robots" content="noindex', login_response.text)
+        self.assertEqual(admin_response.status_code, 303)
+        self.assertEqual(admin_response.headers["location"], "/dashboard/admin/login")
+        self.assertIn("noindex", admin_response.headers["x-robots-tag"])
+        self.assertIn("noindex", api_response.headers["x-robots-tag"])
+        self.assertEqual(robots_response.status_code, 200)
+        self.assertIn("Allow: /", robots_response.text)
+        self.assertNotIn("Disallow: /", robots_response.text)
+
+    def test_admin_session_requires_allowed_email_and_disables_unconfigured_storage(self) -> None:
+        client = TestClient(app)
+        test_secret = "test-admin-session-secret-at-least-32-characters"
+
+        with patch.object(settings, "ADMIN_SESSION_SECRET", test_secret):
+            allowed_cookie = _session_signer().dumps({"email": "smpmfast@gmail.com"})
+            client.cookies.set("godelivery_admin_session", allowed_cookie)
+            overview_response = client.get("/api/v1/admin/overview")
+            self.assertEqual(overview_response.status_code, 200)
+            self.assertEqual(overview_response.json()["admin_email"], "smpmfast@gmail.com")
+            self.assertFalse(overview_response.json()["storage"]["editing_enabled"])
+
+            other_user_cookie = _session_signer().dumps({"email": "other@example.com"})
+            client.cookies.set("godelivery_admin_session", other_user_cookie)
+            denied_response = client.get("/api/v1/admin/overview")
+            self.assertEqual(denied_response.status_code, 401)
+
+    def test_admin_status_exposes_sso_setup_without_credentials(self) -> None:
+        client = TestClient(app)
+        with (
+            patch.object(settings, "ADMIN_GOOGLE_CLIENT_ID", None),
+            patch.object(settings, "ADMIN_GOOGLE_CLIENT_SECRET", None),
+            patch.object(settings, "ADMIN_OAUTH_REDIRECT_URI", None),
+            patch.object(settings, "ADMIN_SESSION_SECRET", None),
+        ):
+            status = client.get("/api/v1/admin/status")
+            login = client.get("/admin/auth/google/login")
+
+        self.assertEqual(status.status_code, 200)
+        self.assertFalse(status.json()["sso_configured"])
+        self.assertFalse(status.json()["storage"]["editing_enabled"])
+        self.assertEqual(login.status_code, 503)
+        self.assertEqual(login.json()["detail"]["code"], "google_sso_not_configured")
+
+    def test_google_sign_in_start_uses_pkce_and_signed_state_cookie(self) -> None:
+        client = TestClient(app)
+        with (
+            patch.object(settings, "ADMIN_GOOGLE_CLIENT_ID", "test-client-id"),
+            patch.object(settings, "ADMIN_GOOGLE_CLIENT_SECRET", "test-client-secret"),
+            patch.object(settings, "ADMIN_OAUTH_REDIRECT_URI", "http://testserver/admin/auth/google/callback"),
+            patch.object(settings, "ADMIN_SESSION_SECRET", "test-admin-session-secret-at-least-32-characters"),
+        ):
+            response = client.get("/admin/auth/google/login", follow_redirects=False)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("code_challenge_method=S256", response.headers["location"])
+        self.assertIn("code_challenge=", response.headers["location"])
+        self.assertIn("godelivery_admin_oauth_state", response.headers["set-cookie"])
+
     def test_status_reports_unverified_catalog_and_no_active_promotions(self) -> None:
         status = get_knowledge_base_status()
 
