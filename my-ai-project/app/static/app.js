@@ -19,6 +19,20 @@ let isListening = false;
 let playbackTime = 0;
 let playbackNodes = [];
 let assistantTranscript = null;
+const ticketInfo = document.querySelector("#ticket-info");
+
+function addToStoredBasket(productId, quantity) {
+  let basket = [];
+  try {
+    basket = JSON.parse(localStorage.getItem("godelivery-basket") || "[]");
+  } catch {
+    basket = [];
+  }
+  const line = basket.find((entry) => entry[0] === productId);
+  if (line) line[1] += quantity;
+  else basket.push([productId, quantity]);
+  localStorage.setItem("godelivery-basket", JSON.stringify(basket));
+}
 
 function setStatus(message) {
   statusMessage.textContent = message;
@@ -156,8 +170,19 @@ function handleLiveMessage(message) {
   } else if (message.type === "interrupted") {
     stopPlayback();
     assistantTranscript = null;
+  } else if (message.type === "ticket") {
+    if (ticketInfo) {
+      const opened = message.opened_at ? new Date(message.opened_at).toLocaleString("th-TH") : "";
+      ticketInfo.textContent = `หมายเลขตั๋ว ${message.ticket_no} · เปิดสนทนา ${opened}`;
+      ticketInfo.hidden = false;
+    }
+  } else if (message.type === "cart_add") {
+    addToStoredBasket(message.product_id, message.quantity);
+  } else if (message.type === "redirect") {
+    stopPlayback();
+    setStatus("กำลังพาไปยังหน้าถัดไป...");
+    window.setTimeout(() => window.location.assign(message.url || "/"), 800);
   } else if (message.type === "error") {
-    setStatus(message.message || "Gemini Live เกิดข้อผิดพลาด");
     appendMessage("assistant", message.message || "Gemini Live เกิดข้อผิดพลาด", { error: true });
   }
 }

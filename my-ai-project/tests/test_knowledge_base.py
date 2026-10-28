@@ -799,10 +799,17 @@ class KnowledgeBaseTests(unittest.TestCase):
             {document["source"] for document in context["documents"]},
         )
 
-    def test_live_config_includes_local_knowledge_data_without_tools(self) -> None:
+    def test_live_config_includes_knowledge_and_fasai_tools(self) -> None:
         config = _live_config("th-TH")
 
-        self.assertIsNone(config.tools)
+        names = {
+            declaration.name
+            for tool in config.tools
+            for declaration in tool.function_declarations
+        }
+        self.assertEqual(names, {"add_to_cart", "go_checkout", "log_callback"})
+        self.assertEqual(config.realtime_input_config.automatic_activity_detection.silence_duration_ms, 1800)
+        self.assertNotIn("{{", config.system_instruction)
         self.assertIn("Current local knowledge-base data", config.system_instruction)
 
     def test_knowledge_api_exposes_search_and_status(self) -> None:
