@@ -101,6 +101,8 @@ def _live_config(language: Literal["th-TH", "en-US"]) -> types.LiveConnectConfig
 
 def _live_error_message(error: Exception) -> str:
     message = str(error).lower()
+    if "service account" in message and ("deleted" in message or "disabled" in message):
+        return "Gemini API key is disabled: its bound service account was deleted or disabled. Create or enable a new key."
     if "api_key_invalid" in message or "invalid api key" in message:
         return "Gemini API key was rejected. Check GEMINI_API_KEY."
     if "resource_exhausted" in message or "quota" in message or "429" in message:
@@ -301,6 +303,7 @@ async def gemini_live(
         pass
     except Exception as exc:
         close_reason = "error"
+        logger.error("Gemini Live session failed: %s: %s", type(exc).__name__, exc, exc_info=True)
         try:
             await emit({"type": "error", "message": _live_error_message(exc)})
             await websocket.close(code=1011)
