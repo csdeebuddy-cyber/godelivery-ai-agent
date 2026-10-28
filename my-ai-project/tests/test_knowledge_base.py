@@ -261,7 +261,7 @@ class KnowledgeBaseTests(unittest.TestCase):
         self.assertEqual(home_styles_response.status_code, 200)
         self.assertIn(".hero-card", home_styles_response.text)
         self.assertEqual(home_script_response.status_code, 200)
-        self.assertIn("/api/v1/site/orders", home_script_response.text)
+        self.assertIn("/api/v1/site/orders", client.get("/static/cart.js").text)
         self.assertEqual(product_styles_response.status_code, 200)
         self.assertIn(".store-product-card", product_styles_response.text)
         self.assertEqual(product_script_response.status_code, 200)

@@ -41,7 +41,7 @@
         <a href="/product">ผลิตภัณฑ์</a>
         <a href="#promotions">โปรโมชันและข่าวสาร</a>
         <a href="#faqs">คำถามที่พบบ่อย</a>
-        <a href="/#basket">ตะกร้า <span id="basket-count" class="basket-count">0</span></a>
+        <a href="/cart">ตะกร้า <span id="basket-count" class="basket-count">0</span></a>
       </nav>
 
       <div class="member-actions" id="member-actions">
@@ -61,7 +61,7 @@
           <a href="/product">ผลิตภัณฑ์</a>
           <a href="#promotions">โปรโมชันและข่าวสาร</a>
           <a href="#faqs">คำถามที่พบบ่อย</a>
-          <a href="/#basket">ตะกร้าสินค้า</a>
+          <a href="/cart">ตะกร้าสินค้า</a>
           <a href="#partners">พาร์ทเนอร์</a>
           <a href="/chatandshop">คุยกับ AI</a>
         </nav>
@@ -159,32 +159,6 @@
       </div>
       <p>สอบถามข้อมูลโปรโมชันล่าสุดกับผู้ช่วยของเรา</p>
       <a class="gold-button" href="/chatandshop">ดูรายละเอียด <span aria-hidden="true">→</span></a>
-    </section>
-
-    <section class="container basket-panel" id="basket">
-      <div class="section-heading">
-        <div><span class="section-kicker">YOUR BASKET</span><h2>ตะกร้าสินค้า</h2></div>
-        <a href="/product">เลือกดูสินค้า <span aria-hidden="true">→</span></a>
-      </div>
-      <div id="basket-items" class="basket-items"></div>
-      <p id="basket-empty" class="catalog-empty">ยังไม่มีสินค้าในตะกร้า</p>
-      <div id="order-area" hidden>
-        <p class="basket-total">ยอดรวม <strong id="basket-total">฿0.00</strong> <span>ชำระเงินปลายทาง (COD)</span></p>
-        <form id="order-form" class="customer-form">
-          <h3>ข้อมูลจัดส่ง</h3>
-          <label>ชื่อผู้รับ<input name="customer" maxlength="160" autocomplete="name" required></label>
-          <label>ที่อยู่<input name="address" maxlength="500" autocomplete="address-line1" required></label>
-          <label>ที่อยู่เพิ่มเติม<input name="address1" maxlength="500" autocomplete="address-line2"></label>
-          <div class="form-row">
-            <label>รหัสไปรษณีย์<input name="postcode" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" autocomplete="postal-code" required></label>
-            <label>เบอร์โทรศัพท์<input name="phone_number" type="tel" maxlength="24" autocomplete="tel" required></label>
-          </div>
-          <label>หมายเหตุ<input name="remark" maxlength="1000"></label>
-          <label class="consent-label"><input name="privacy_consent" type="checkbox" required> ยินยอมให้ใช้ข้อมูลเพื่อดำเนินการจัดส่งตาม <a href="#security">Privacy Policy</a></label>
-          <p id="order-state" class="form-state" role="status"></p>
-          <button class="primary-button" type="submit" disabled>ยืนยันคำสั่งซื้อแบบเก็บเงินปลายทาง</button>
-        </form>
-      </div>
     </section>
 
     <section class="container policy-grid" aria-label="ข้อมูลและนโยบาย">
