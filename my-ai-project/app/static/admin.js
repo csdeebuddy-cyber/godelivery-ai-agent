@@ -89,10 +89,66 @@ function createContentRecord(kind, values = {}) {
     }
     imageSelect.value = values.image_id || "";
     imageLabel.append(imageSelect);
+    const linkLabel = document.createElement("label");
+    linkLabel.className = "wide-field";
+    linkLabel.append(document.createTextNode("ลิงก์ภาพจาก Firebase (วางแล้วระบบดึงภาพและบันทึกถาวรทันที)"));
+    const linkInput = document.createElement("input");
+    linkInput.type = "url";
+    linkInput.dataset.field = "image_source_url";
+    linkInput.maxLength = 2000;
+    linkInput.placeholder = "https://firebasestorage.googleapis.com/v0/b/.../o/...?alt=media&token=...";
+    linkInput.value = values.image_source_url || "";
+    const linkStatus = document.createElement("small");
+    linkStatus.className = "image-link-status";
+    const linkPreview = document.createElement("img");
+    linkPreview.className = "image-link-preview";
+    linkPreview.alt = "";
+    linkPreview.hidden = true;
+    linkPreview.style.maxWidth = "120px";
+    if (values.image_id) {
+      linkPreview.src = `/api/v1/site/assets/${values.image_id}`;
+      linkPreview.hidden = false;
+    }
+    linkLabel.append(linkInput, linkStatus, linkPreview);
+    let importedUrl = linkInput.value.trim();
+    const importLink = async () => {
+      const url = linkInput.value.trim();
+      if (!url || url === importedUrl) return;
+      linkStatus.textContent = "กำลังดึงภาพและบันทึก…";
+      try {
+        const response = await fetch("/api/v1/admin/assets/import-link", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRF-Token": adminCsrfToken },
+          body: JSON.stringify({ url }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+          window.location.replace("/dashboard/admin/login");
+          return;
+        }
+        if (!response.ok) throw new Error(responseErrorMessage(result, "ดึงภาพจากลิงก์ไม่สำเร็จ"));
+        if (!Array.from(imageSelect.options).some((option) => option.value === result.asset_id)) {
+          imageSelect.append(new Option(result.filename, result.asset_id));
+        }
+        if (!catalogImages.some((image) => image.asset_id === result.asset_id)) {
+          catalogImages = [...catalogImages, result];
+        }
+        imageSelect.value = result.asset_id;
+        importedUrl = url;
+        linkPreview.src = result.url;
+        linkPreview.hidden = false;
+        linkStatus.textContent = "บันทึกภาพแล้ว กด “บันทึกและเผยแพร่” เพื่อใช้บนหน้าเว็บ";
+      } catch (error) {
+        linkStatus.textContent = error.message;
+      }
+    };
+    linkInput.addEventListener("change", importLink);
+    linkInput.addEventListener("paste", () => setTimeout(importLink, 0));
     fields.append(
       contentField("รหัสสินค้า", "product_id", values.product_id, { required: "required", maxlength: "80" }),
       contentField("ชื่อสินค้า", "name", values.name, { required: "required", maxlength: "180" }),
       imageLabel,
+      linkLabel,
       contentField("รายละเอียด", "description", values.description, { type: "textarea", wide: true, maxlength: "3000" }),
       contentField("ราคาปกติ", "regular_price", values.regular_price ?? 0, { type: "number", min: "0", step: "0.01", required: "required" }),
       contentField("ราคาขาย (เว้นว่างถ้าไม่มี)", "sale_price", values.sale_price ?? "", { type: "number", min: "0", step: "0.01" }),
@@ -172,6 +228,7 @@ function readContentRecords(container, kind) {
         name: value("name"),
         description: value("description"),
         image_id: value("image_id") || null,
+        image_source_url: value("image_source_url") || null,
         regular_price: Number(value("regular_price")),
         sale_price: salePrice ? Number(salePrice) : null,
         stock_quantity: Number(value("stock_quantity")),

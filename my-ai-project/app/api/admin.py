@@ -17,7 +17,7 @@ from google.oauth2 import id_token
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from app.config import settings
-from app.schemas.admin import GoogleSheetsSettings
+from app.schemas.admin import GoogleSheetsSettings, ImageLinkImport
 from app.schemas.site_content import SiteContent
 from app.schemas.widget import WidgetSiteSettings
 from app.services.admin_settings import (
@@ -29,6 +29,7 @@ from app.services.google_sheets_knowledge import preview_google_sheets_knowledge
 from app.services.site_content import get_site_content, save_site_content
 from app.services.firebase.security import MAX_IMAGE_SIZE_BYTES, validate_catalog_image
 from app.services.firebase.storage import list_catalog_images, upload_catalog_image
+from app.services.firebase.image_import import ImageLinkError, import_catalog_image
 from app.services.widget_sites import (
     delete_widget_site,
     get_widget_site,
@@ -590,6 +591,28 @@ async def upload_catalog_asset(
         ) from exc
     finally:
         await file.close()
+
+
+@api_router.post("/assets/import-link", status_code=201)
+async def import_catalog_asset_link(
+    request: Request,
+    payload: ImageLinkImport,
+    csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+) -> dict[str, Any]:
+    admin_email = _require_admin(request)
+    _require_csrf(request, csrf_token)
+    try:
+        return await import_catalog_image(payload.url, admin_email)
+    except (ImageLinkError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (RuntimeError, GoogleAPIError, GoogleAuthError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "firebase_storage_unavailable",
+                "message": "บันทึกภาพไม่สำเร็จ กรุณาตรวจ bucket และสิทธิ์ Storage ของ service account",
+            },
+        ) from exc
 
 
 @api_router.put("/settings/google-sheets")

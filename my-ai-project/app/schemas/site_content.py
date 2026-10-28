@@ -24,6 +24,7 @@ class ProductItem(BaseModel):
     name: str = Field(min_length=1, max_length=180)
     description: str = Field(default="", max_length=3000)
     image_id: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
+    image_source_url: str | None = Field(default=None, max_length=2000)
     regular_price: float = Field(ge=0)
     sale_price: float | None = Field(default=None, ge=0)
     stock_quantity: int = Field(default=0, ge=0)

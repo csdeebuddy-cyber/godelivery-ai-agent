@@ -25,9 +25,11 @@ def upload_catalog_image(
     content_type: str,
     filename: str | None,
     uploaded_by: str,
+    asset_id: str | None = None,
+    source_url: str | None = None,
 ) -> dict[str, Any]:
     extension = validate_catalog_image(data, content_type)
-    asset_id = uuid4().hex
+    asset_id = asset_id or uuid4().hex
     object_path = f"{CATALOG_IMAGE_PREFIX}/{asset_id}{extension}"
     bucket = get_storage_bucket()
     blob = bucket.blob(object_path)
@@ -46,6 +48,8 @@ def upload_catalog_image(
         "uploaded_by": uploaded_by,
         "uploaded_at": firestore.SERVER_TIMESTAMP,
     }
+    if source_url:
+        metadata["source_url"] = source_url
     try:
         _asset_document(asset_id).create(metadata)
     except GoogleAPIError:

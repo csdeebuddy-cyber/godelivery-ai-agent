@@ -1,6 +1,12 @@
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
+class ImageLinkImport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(min_length=1, max_length=2000)
+
+
 class GoogleSheetsProductColumns(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
