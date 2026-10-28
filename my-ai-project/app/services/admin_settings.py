@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.config import settings
+from app.services.firebase.clients import get_firestore_document
 
 
 FIRESTORE_COLLECTION = "admin_settings"
@@ -20,13 +20,7 @@ DEFAULT_PROMOTION_COLUMNS = {
 
 
 def _google_sheets_document() -> Any:
-    if not settings.FIRESTORE_PROJECT_ID:
-        raise RuntimeError("Firestore project is not configured.")
-
-    from google.cloud import firestore
-
-    client = firestore.Client(project=settings.FIRESTORE_PROJECT_ID)
-    return client.collection(FIRESTORE_COLLECTION).document(GOOGLE_SHEETS_DOCUMENT)
+    return get_firestore_document(FIRESTORE_COLLECTION, GOOGLE_SHEETS_DOCUMENT)
 
 
 def get_google_sheets_settings() -> dict[str, Any]:
@@ -39,10 +33,16 @@ def get_google_sheets_settings() -> dict[str, Any]:
             "product_columns": DEFAULT_PRODUCT_COLUMNS.copy(),
             "promotion_range": "promotion!A2:C",
             "promotion_columns": DEFAULT_PROMOTION_COLUMNS.copy(),
-            "orders_range": "orders!A2:Z",
-            "member_range": "MEMBER!A2:Z",
+            "orders_range": "orders!A:O",
+            "member_range": "MEMBER!A:F",
         }
     data = document.to_dict() or {}
+    orders_range = data.get("orders_range", "orders!A:O")
+    if orders_range == "orders!A2:Z":
+        orders_range = "orders!A:O"
+    member_range = data.get("member_range", "MEMBER!A:F")
+    if member_range == "MEMBER!A2:Z":
+        member_range = "MEMBER!A:F"
     return {
         "configured": True,
         "spreadsheet_id": data.get("spreadsheet_id", ""),
@@ -56,8 +56,8 @@ def get_google_sheets_settings() -> dict[str, Any]:
             **DEFAULT_PROMOTION_COLUMNS,
             **(data.get("promotion_columns") or {}),
         },
-        "orders_range": data.get("orders_range", "orders!A2:Z"),
-        "member_range": data.get("member_range", "MEMBER!A2:Z"),
+        "orders_range": orders_range,
+        "member_range": member_range,
     }
 
 

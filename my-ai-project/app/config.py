@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     ADMIN_GOOGLE_CLIENT_SECRET: str | None = None
     ADMIN_OAUTH_REDIRECT_URI: str | None = None
     ADMIN_SESSION_SECRET: str | None = None
-    FIRESTORE_PROJECT_ID: str | None = None
+    FIRESTORE_PROJECT_ID: str = "gen-lang-client-0845508747"
+    FIREBASE_STORAGE_BUCKET: str | None = None
     HOST: str = "0.0.0.0"
     PORT: int = 8000
 

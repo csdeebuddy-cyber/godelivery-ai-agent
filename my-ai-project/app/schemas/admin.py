@@ -51,13 +51,13 @@ class GoogleSheetsSettings(BaseModel):
         default_factory=GoogleSheetsPromotionColumns
     )
     orders_range: str = Field(
-        default="orders!A2:Z",
+        default="orders!A:O",
         min_length=1,
         max_length=200,
         pattern=r"^[^\x00-\x1f]+$",
     )
     member_range: str = Field(
-        default="MEMBER!A2:Z",
+        default="MEMBER!A:F",
         min_length=1,
         max_length=200,
         pattern=r"^[^\x00-\x1f]+$",

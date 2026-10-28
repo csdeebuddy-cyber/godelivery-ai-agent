@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
@@ -33,8 +33,8 @@ async def robots_txt() -> PlainTextResponse:
 
 
 @app.get("/", include_in_schema=False)
-async def home() -> RedirectResponse:
-    return RedirectResponse("/chatandshop", status_code=307)
+async def home() -> FileResponse:
+    return FileResponse(STATIC_DIR / "home.html")
 
 
 @app.get("/chatandshop", include_in_schema=False)

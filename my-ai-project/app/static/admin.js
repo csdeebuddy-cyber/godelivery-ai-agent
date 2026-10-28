@@ -9,14 +9,299 @@ const widgetSitesList = document.querySelector("#widget-sites-list");
 const widgetSiteForm = document.querySelector("#widget-site-form");
 const saveWidgetSiteButton = document.querySelector("#save-widget-site");
 const cancelWidgetEditButton = document.querySelector("#cancel-widget-edit");
+const siteContentForm = document.querySelector("#site-content-form");
+const siteContentState = document.querySelector("#site-content-state");
+const saveSiteContentButton = document.querySelector("#save-site-content");
+const siteFaqList = document.querySelector("#site-faq-list");
+const siteProductList = document.querySelector("#site-product-list");
+const sitePromotionList = document.querySelector("#site-promotion-list");
+const catalogImageFile = document.querySelector("#catalog-image-file");
+const catalogImageState = document.querySelector("#catalog-image-state");
+const catalogImageGallery = document.querySelector("#catalog-image-gallery");
+const uploadCatalogImageButton = document.querySelector("#upload-catalog-image");
 let editingWidgetSiteId = null;
 let adminCsrfToken = "";
 let sheetsSettingsConfigured = false;
+let catalogImages = [];
 
 function responseErrorMessage(body, fallback) {
   if (typeof body.detail === "string") return body.detail;
   return body.detail?.message || fallback;
 }
+
+function contentField(labelText, name, value, { type = "text", wide = false, ...attributes } = {}) {
+  const label = document.createElement("label");
+  if (wide) label.className = "wide-field";
+  label.append(document.createTextNode(labelText));
+  const input = document.createElement(type === "textarea" ? "textarea" : "input");
+  if (type !== "textarea") input.type = type;
+  input.dataset.field = name;
+  input.value = value ?? "";
+  for (const [key, attributeValue] of Object.entries(attributes)) {
+    input.setAttribute(key, attributeValue);
+  }
+  label.append(input);
+  return label;
+}
+
+function createContentRecord(kind, values = {}) {
+  const record = document.createElement("fieldset");
+  record.className = "content-record";
+  record.dataset.kind = kind;
+  const legend = document.createElement("legend");
+  legend.textContent = kind === "faq"
+    ? "คำถาม"
+    : kind === "product"
+      ? "สินค้า"
+      : "โปรโมชัน";
+  record.append(legend);
+
+  const fields = document.createElement("div");
+  fields.className = "content-record-grid";
+  if (kind === "faq") {
+    fields.append(
+      contentField("คำถาม", "question", values.question, { required: "required", maxlength: "300" }),
+      contentField("คำตอบ", "answer", values.answer, { type: "textarea", wide: true, required: "required", maxlength: "5000" }),
+    );
+  } else if (kind === "product") {
+    const imageLabel = document.createElement("label");
+    imageLabel.className = "wide-field";
+    imageLabel.append(document.createTextNode("รูปสินค้า"));
+    const imageSelect = document.createElement("select");
+    imageSelect.dataset.field = "image_id";
+    const noImageOption = document.createElement("option");
+    noImageOption.value = "";
+    noImageOption.textContent = "ไม่ใช้รูปภาพ";
+    imageSelect.append(noImageOption);
+    for (const image of catalogImages) {
+      const option = document.createElement("option");
+      option.value = image.asset_id;
+      option.textContent = image.filename;
+      imageSelect.append(option);
+    }
+    imageSelect.value = values.image_id || "";
+    imageLabel.append(imageSelect);
+    fields.append(
+      contentField("รหัสสินค้า", "product_id", values.product_id, { required: "required", maxlength: "80" }),
+      contentField("ชื่อสินค้า", "name", values.name, { required: "required", maxlength: "180" }),
+      imageLabel,
+      contentField("รายละเอียด", "description", values.description, { type: "textarea", wide: true, maxlength: "3000" }),
+      contentField("ราคาปกติ", "regular_price", values.regular_price ?? 0, { type: "number", min: "0", step: "0.01", required: "required" }),
+      contentField("ราคาขาย (เว้นว่างถ้าไม่มี)", "sale_price", values.sale_price ?? "", { type: "number", min: "0", step: "0.01" }),
+      contentField("จำนวนคงเหลือ", "stock_quantity", values.stock_quantity ?? 0, { type: "number", min: "0", step: "1", required: "required" }),
+    );
+  } else {
+    fields.append(
+      contentField("รหัสโปรโมชัน", "promotion_id", values.promotion_id, { required: "required", maxlength: "80" }),
+      contentField("ชื่อโปรโมชัน", "title", values.title, { required: "required", maxlength: "180" }),
+      contentField("เงื่อนไข/รายละเอียด", "details", values.details, { type: "textarea", wide: true, required: "required", maxlength: "5000" }),
+    );
+  }
+  record.append(fields);
+
+  if (kind !== "faq") {
+    const activeLabel = document.createElement("label");
+    activeLabel.className = "content-active";
+    const activeInput = document.createElement("input");
+    activeInput.type = "checkbox";
+    activeInput.dataset.field = "active";
+    activeInput.checked = values.active !== false;
+    activeLabel.append(activeInput, document.createTextNode("เผยแพร่บนหน้าเว็บ"));
+    record.append(activeLabel);
+  }
+
+  const removeButton = document.createElement("button");
+  removeButton.type = "button";
+  removeButton.className = "secondary-button content-remove-button";
+  removeButton.textContent = "ลบรายการนี้";
+  removeButton.addEventListener("click", () => record.remove());
+  record.append(removeButton);
+  return record;
+}
+
+function renderContentRecords(container, kind, records) {
+  container.replaceChildren(...records.map((record) => createContentRecord(kind, record)));
+}
+
+function readContentRecords(container, kind) {
+  return Array.from(container.querySelectorAll(".content-record")).map((record) => {
+    const value = (name) => record.querySelector(`[data-field="${name}"]`).value.trim();
+    if (kind === "faq") {
+      return { question: value("question"), answer: value("answer") };
+    }
+    const active = record.querySelector('[data-field="active"]').checked;
+    if (kind === "product") {
+      const salePrice = value("sale_price");
+      return {
+        product_id: value("product_id"),
+        name: value("name"),
+        description: value("description"),
+        image_id: value("image_id") || null,
+        regular_price: Number(value("regular_price")),
+        sale_price: salePrice ? Number(salePrice) : null,
+        stock_quantity: Number(value("stock_quantity")),
+        active,
+      };
+    }
+    return {
+      promotion_id: value("promotion_id"),
+      title: value("title"),
+      details: value("details"),
+      active,
+    };
+  });
+}
+
+function renderCatalogImages(images) {
+  catalogImages = images;
+  for (const productRecord of siteProductList.querySelectorAll(".content-record")) {
+    const select = productRecord.querySelector('[data-field="image_id"]');
+    const selectedId = select.value;
+    const options = [
+      new Option("ไม่ใช้รูปภาพ", ""),
+      ...images.map((image) => new Option(image.filename, image.asset_id)),
+    ];
+    select.replaceChildren(...options);
+    select.value = images.some((image) => image.asset_id === selectedId) ? selectedId : "";
+  }
+  catalogImageGallery.replaceChildren(...images.map((image) => {
+    const card = document.createElement("article");
+    card.className = "catalog-image-card";
+    const preview = document.createElement("img");
+    preview.src = image.url;
+    preview.alt = image.filename;
+    preview.loading = "lazy";
+    card.append(preview);
+    const filename = document.createElement("small");
+    filename.textContent = image.filename;
+    card.append(filename);
+    return card;
+  }));
+}
+
+async function loadCatalogImages() {
+  const response = await fetch("/api/v1/admin/assets");
+  if (!response.ok) {
+    if (response.status === 401) {
+      window.location.replace("/dashboard/admin/login");
+      return;
+    }
+    const body = await response.json().catch(() => ({}));
+    throw new Error(responseErrorMessage(body, "โหลดคลังภาพไม่สำเร็จ"));
+  }
+  const result = await response.json();
+  renderCatalogImages(result.assets || []);
+  catalogImageState.textContent = result.assets?.length
+    ? `มีภาพสินค้า ${result.assets.length} รายการใน Firebase Storage`
+    : "ยังไม่มีภาพสินค้าในคลัง";
+  uploadCatalogImageButton.disabled = !adminCsrfToken;
+}
+
+uploadCatalogImageButton.addEventListener("click", async () => {
+  const file = catalogImageFile.files[0];
+  if (!file) {
+    catalogImageState.textContent = "กรุณาเลือกรูปภาพก่อนอัปโหลด";
+    return;
+  }
+  uploadCatalogImageButton.disabled = true;
+  catalogImageState.textContent = "กำลังอัปโหลดภาพไป Firebase Storage…";
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch("/api/v1/admin/assets/images", {
+      method: "POST",
+      headers: { "X-CSRF-Token": adminCsrfToken },
+      body: formData,
+    });
+    const result = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      window.location.replace("/dashboard/admin/login");
+      return;
+    }
+    if (!response.ok) throw new Error(responseErrorMessage(result, "อัปโหลดภาพไม่สำเร็จ"));
+    catalogImageFile.value = "";
+    await loadCatalogImages();
+    catalogImageState.textContent = `อัปโหลด ${result.filename} แล้ว เลือกรูปนี้ในรายการสินค้าเพื่อเผยแพร่`;
+  } catch (error) {
+    catalogImageState.textContent = error.message;
+  } finally {
+    uploadCatalogImageButton.disabled = !adminCsrfToken;
+  }
+});
+
+async function loadSiteContent() {
+  const response = await fetch("/api/v1/admin/settings/site-content");
+  if (!response.ok) {
+    if (response.status === 401) {
+      window.location.replace("/dashboard/admin/login");
+      return;
+    }
+    const body = await response.json().catch(() => ({}));
+    throw new Error(responseErrorMessage(body, "โหลดเนื้อหาเว็บไซต์ไม่สำเร็จ"));
+  }
+  const content = await response.json();
+  for (const sectionName of ["company", "terms", "security", "shipping", "returns"]) {
+    document.querySelector(`#content-${sectionName}-title`).value = content[sectionName]?.title || "";
+    document.querySelector(`#content-${sectionName}-body`).value = content[sectionName]?.body || "";
+  }
+  renderContentRecords(siteFaqList, "faq", content.faqs || []);
+  renderContentRecords(siteProductList, "product", content.products || []);
+  renderContentRecords(sitePromotionList, "promotion", content.promotions || []);
+  siteContentState.textContent = "โหลดเนื้อหาจาก Firestore แล้ว";
+  saveSiteContentButton.disabled = !adminCsrfToken;
+}
+
+for (const [buttonId, container, kind] of [
+  ["#add-site-faq", siteFaqList, "faq"],
+  ["#add-site-product", siteProductList, "product"],
+  ["#add-site-promotion", sitePromotionList, "promotion"],
+]) {
+  document.querySelector(buttonId).addEventListener("click", () => {
+    container.append(createContentRecord(kind));
+    container.lastElementChild.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+}
+
+siteContentForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  saveSiteContentButton.disabled = true;
+  siteContentState.textContent = "กำลังบันทึกและเผยแพร่เนื้อหา…";
+  const content = {};
+  for (const sectionName of ["company", "terms", "security", "shipping", "returns"]) {
+    content[sectionName] = {
+      title: document.querySelector(`#content-${sectionName}-title`).value.trim(),
+      body: document.querySelector(`#content-${sectionName}-body`).value.trim(),
+    };
+  }
+  content.faqs = readContentRecords(siteFaqList, "faq");
+  content.products = readContentRecords(siteProductList, "product");
+  content.promotions = readContentRecords(sitePromotionList, "promotion");
+  try {
+    const response = await fetch("/api/v1/admin/settings/site-content", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRF-Token": adminCsrfToken,
+      },
+      body: JSON.stringify(content),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      window.location.replace("/dashboard/admin/login");
+      return;
+    }
+    if (!response.ok) throw new Error(responseErrorMessage(result, "บันทึกเนื้อหาเว็บไซต์ไม่สำเร็จ"));
+    siteContentState.textContent = result.message;
+  } catch (error) {
+    siteContentState.textContent = error.message;
+  } finally {
+    saveSiteContentButton.disabled = !adminCsrfToken;
+  }
+});
+
+document.querySelector("#add-site-faq").disabled = false;
+document.querySelector("#add-site-product").disabled = false;
+document.querySelector("#add-site-promotion").disabled = false;
 
 async function loadSheetsSettings() {
   const response = await fetch("/api/v1/admin/settings/google-sheets");
@@ -53,8 +338,8 @@ async function loadSheetsSettings() {
   document.querySelector("#sheet-column-promotion-id").value = promotionColumns.promotion_id;
   document.querySelector("#sheet-column-promotion-name").value = promotionColumns.promotion_name;
   document.querySelector("#sheet-column-promotion-conditions").value = promotionColumns.conditions;
-  document.querySelector("#orders-sheet-range").value = data.orders_range || "orders!A2:Z";
-  document.querySelector("#member-sheet-range").value = data.member_range || "MEMBER!A2:Z";
+  document.querySelector("#orders-sheet-range").value = data.orders_range || "orders!A:O";
+  document.querySelector("#member-sheet-range").value = data.member_range || "MEMBER!A:F";
   sheetsState.textContent = data.configured
     ? "โหลดการตั้งค่าจาก Firestore แล้ว"
     : "ยังไม่มีการตั้งค่า Spreadsheet";
@@ -301,7 +586,15 @@ fetch("/api/v1/admin/overview")
     document.querySelector("#verified-count").textContent =
       `ยืนยันแล้ว ${knowledge.verified_products} รายการ`;
     document.querySelector("#promotion-count").textContent = knowledge.active_promotions;
-    document.querySelector("#storage-message").textContent = data.message;
+    const firebaseStatus = data.firebase;
+    const firestoreStatus = firebaseStatus.firestore_configured
+      ? `Firestore: ${firebaseStatus.project_id}`
+      : "Firestore: ยังไม่ตั้งค่า";
+    const bucketStatus = firebaseStatus.storage_configured
+      ? `Storage: ${firebaseStatus.storage_bucket}`
+      : "Storage: ยังไม่ตั้งค่า bucket";
+    document.querySelector("#storage-message").textContent =
+      `${data.message} ${firestoreStatus} · ${bucketStatus}`;
     document.querySelector("#gemini-key-state").textContent =
       data.gemini_api_key_configured ? "ตั้งค่าแล้ว" : "ยังไม่ได้ตั้งค่า";
     loadSheetsSettings().catch((error) => {
@@ -311,6 +604,14 @@ fetch("/api/v1/admin/overview")
     loadWidgetSites().catch((error) => {
       widgetSitesState.textContent = error.message;
       saveWidgetSiteButton.disabled = true;
+    });
+    loadSiteContent().catch((error) => {
+      siteContentState.textContent = error.message;
+      saveSiteContentButton.disabled = true;
+    });
+    loadCatalogImages().catch((error) => {
+      catalogImageState.textContent = error.message;
+      uploadCatalogImageButton.disabled = true;
     });
   })
   .catch((error) => {

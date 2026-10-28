@@ -70,8 +70,80 @@
         <a class="secondary-button" href="/api/v1/knowledge/promotions" target="_blank" rel="noopener">ดูโปรโมชั่น</a>
       </div>
       <div class="notice notice-warning">
-        การแก้ไขสินค้า/โปรโมชั่นและการเผยแพร่ยังไม่เปิดใช้งาน ส่วนฟอร์ม Google Sheets ด้านล่างบันทึกการเชื่อมต่อและ mapping คอลัมน์เท่านั้น
+        เนื้อหาบนหน้าแรกจัดการได้ในโมดูลเว็บไซต์ด้านล่าง สินค้าและโปรโมชันเผยแพร่จาก Firestore ไม่ได้ดึงจาก Google Sheets
       </div>
+    </section>
+
+    <section class="management-panel content-editor-panel">
+      <div>
+        <div class="eyebrow">WEBSITE CONTENT</div>
+        <h2>จัดการเมนูและเนื้อหาหน้าแรก</h2>
+        <p class="muted">บันทึกแล้วเผยแพร่ให้หน้าเว็บไซต์ทันที ข้อมูลเนื้อหาเก็บใน Firestore ส่วนคำสั่งซื้อ/สมาชิกเก็บใน Google Sheets</p>
+      </div>
+      <p id="site-content-state" class="notice" role="status">กำลังโหลดเนื้อหาเว็บไซต์…</p>
+      <form id="site-content-form" class="settings-form">
+        <fieldset class="content-group">
+          <legend>เกี่ยวกับเรา / ข้อมูลบริษัท</legend>
+          <label for="content-company-title">หัวข้อ</label>
+          <input id="content-company-title" type="text" maxlength="160">
+          <label for="content-company-body">รายละเอียด</label>
+          <textarea id="content-company-body" rows="4" maxlength="12000"></textarea>
+        </fieldset>
+        <fieldset class="content-group">
+          <legend>เงื่อนไขการใช้งาน</legend>
+          <label for="content-terms-title">หัวข้อ</label>
+          <input id="content-terms-title" type="text" maxlength="160">
+          <label for="content-terms-body">รายละเอียด</label>
+          <textarea id="content-terms-body" rows="4" maxlength="12000"></textarea>
+        </fieldset>
+        <fieldset class="content-group">
+          <legend>ความปลอดภัย / Privacy Policy</legend>
+          <label for="content-security-title">หัวข้อ</label>
+          <input id="content-security-title" type="text" maxlength="160">
+          <label for="content-security-body">รายละเอียดและประกาศความเป็นส่วนตัว</label>
+          <textarea id="content-security-body" rows="5" maxlength="12000"></textarea>
+        </fieldset>
+        <fieldset class="content-group">
+          <legend>การจัดส่ง</legend>
+          <label for="content-shipping-title">หัวข้อ</label>
+          <input id="content-shipping-title" type="text" maxlength="160">
+          <label for="content-shipping-body">รายละเอียด</label>
+          <textarea id="content-shipping-body" rows="4" maxlength="12000"></textarea>
+        </fieldset>
+        <fieldset class="content-group">
+          <legend>การคืนสินค้า</legend>
+          <label for="content-returns-title">หัวข้อ</label>
+          <input id="content-returns-title" type="text" maxlength="160">
+          <label for="content-returns-body">รายละเอียด</label>
+          <textarea id="content-returns-body" rows="4" maxlength="12000"></textarea>
+        </fieldset>
+        <fieldset class="content-group">
+          <legend>คำถามที่พบบ่อย</legend>
+          <div id="site-faq-list" class="content-record-list"></div>
+          <button id="add-site-faq" class="secondary-button content-add-button" type="button">เพิ่มคำถาม</button>
+        </fieldset>
+        <fieldset class="content-group">
+          <legend>คลังภาพสินค้า (Firebase Storage)</legend>
+          <p class="muted">รองรับ JPEG, PNG และ WebP ขนาดไม่เกิน 5 MB ภาพที่อัปโหลดจะใช้ได้บนหน้าเว็บไซต์</p>
+          <label for="catalog-image-file">เลือกรูปภาพสินค้า</label>
+          <input id="catalog-image-file" type="file" accept="image/jpeg,image/png,image/webp">
+          <button id="upload-catalog-image" class="secondary-button content-add-button" type="button" disabled>อัปโหลดภาพ</button>
+          <p id="catalog-image-state" class="notice" role="status">กำลังตรวจสอบคลังภาพ…</p>
+          <div id="catalog-image-gallery" class="catalog-image-gallery"></div>
+        </fieldset>
+        <fieldset class="content-group">
+          <legend>สินค้า</legend>
+          <p class="muted">กรอกเฉพาะข้อมูลสินค้าที่ต้องการเผยแพร่ ราคาและสต็อกที่บันทึกจะใช้ตรวจคำสั่งซื้อด้วย</p>
+          <div id="site-product-list" class="content-record-list"></div>
+          <button id="add-site-product" class="secondary-button content-add-button" type="button">เพิ่มสินค้า</button>
+        </fieldset>
+        <fieldset class="content-group">
+          <legend>โปรโมชันและข่าวสาร</legend>
+          <div id="site-promotion-list" class="content-record-list"></div>
+          <button id="add-site-promotion" class="secondary-button content-add-button" type="button">เพิ่มโปรโมชัน</button>
+        </fieldset>
+        <button id="save-site-content" class="primary-button" type="submit" disabled>บันทึกและเผยแพร่หน้าเว็บ</button>
+      </form>
     </section>
 
     <section class="management-panel settings-panel">
@@ -116,16 +188,16 @@
           </div>
         </fieldset>
         <label for="orders-sheet-range">แท็บข้อมูลคำสั่งซื้อ (A1 notation)</label>
-        <input id="orders-sheet-range" name="orders_range" type="text" maxlength="200" value="orders!A2:Z" required>
+        <input id="orders-sheet-range" name="orders_range" type="text" maxlength="200" value="orders!A:O" required>
         <label for="member-sheet-range">แท็บข้อมูลสมาชิก (A1 notation)</label>
-        <input id="member-sheet-range" name="member_range" type="text" maxlength="200" value="MEMBER!A2:Z" required>
+        <input id="member-sheet-range" name="member_range" type="text" maxlength="200" value="MEMBER!A:F" required>
         <p id="sheets-settings-state" class="muted" role="status">กำลังโหลดการตั้งค่า…</p>
         <button id="save-sheets-settings" class="primary-button" type="submit" disabled>บันทึกการตั้งค่า</button>
         <button id="preview-sheets-settings" class="secondary-button" type="button" disabled>ทดสอบอ่านสินค้า/โปรโมชั่น</button>
         <pre id="sheets-preview-result" class="sheet-preview-result" hidden></pre>
       </form>
       <div class="notice notice-warning">
-        ปุ่มทดสอบอ่านจะอ่านเฉพาะสินค้าและโปรโมชั่นจาก Spreadsheet ID เดียวกัน โดยไม่บันทึกหรือเผยแพร่ข้อมูล ส่วน orders และ MEMBER เป็นข้อมูลส่วนบุคคล จึงเก็บชื่อช่วงไว้แต่ยังไม่อ่านหรือเปิดให้ widget สาธารณะค้นหา
+        เนื้อหาสินค้า/โปรโมชันบนเว็บไซต์มาจากโมดูลหลังบ้านด้านบน ส่วน Google Sheets ใช้บันทึกข้อมูลที่ลูกค้าส่งเท่านั้น แท็บ orders ใช้ช่วง orders!A:O และหัวคอลัมน์ A:O ตามตัวอย่างที่ให้มา; แท็บ MEMBER ใช้ช่วง MEMBER!A:F และหัวคอลัมน์ Registered date, membernumber, customer, Phone_number, Email, privacy_consent ตามลำดับ ให้แชร์ชีตกับ service account เป็น Editor และห้ามเปิดชีตนี้เป็นสาธารณะ
       </div>
     </section>
 

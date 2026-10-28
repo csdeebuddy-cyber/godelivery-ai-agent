@@ -1,19 +1,13 @@
 from typing import Any
 
-from app.config import settings
+from app.services.firebase.clients import get_firestore_collection
 
 
 WIDGET_SITES_COLLECTION = "chat_widget_sites"
 
 
 def _widget_sites_collection() -> Any:
-    if not settings.FIRESTORE_PROJECT_ID:
-        raise RuntimeError("Firestore project is not configured.")
-
-    from google.cloud import firestore
-
-    client = firestore.Client(project=settings.FIRESTORE_PROJECT_ID)
-    return client.collection(WIDGET_SITES_COLLECTION)
+    return get_firestore_collection(WIDGET_SITES_COLLECTION)
 
 
 def list_widget_sites() -> list[dict[str, Any]]:

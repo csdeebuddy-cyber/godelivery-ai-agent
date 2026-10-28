@@ -7,7 +7,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Header, HTTPException, Request, Response
+from fastapi import APIRouter, File, Header, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
 from google.api_core.exceptions import GoogleAPIError
 from google.auth.exceptions import GoogleAuthError
@@ -18,6 +18,7 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from app.config import settings
 from app.schemas.admin import GoogleSheetsSettings
+from app.schemas.site_content import SiteContent
 from app.schemas.widget import WidgetSiteSettings
 from app.services.admin_settings import (
     get_google_sheets_settings,
@@ -25,6 +26,9 @@ from app.services.admin_settings import (
 )
 from app.services.knowledge_base import get_knowledge_base_status
 from app.services.google_sheets_knowledge import preview_google_sheets_knowledge
+from app.services.site_content import get_site_content, save_site_content
+from app.services.firebase.security import MAX_IMAGE_SIZE_BYTES, validate_catalog_image
+from app.services.firebase.storage import list_catalog_images, upload_catalog_image
 from app.services.widget_sites import (
     delete_widget_site,
     get_widget_site,
@@ -297,7 +301,7 @@ async def admin_status(request: Request) -> dict[str, Any]:
             "provider": "firestore",
             "status": "configured" if firestore_configured else "not_configured",
             "configured": firestore_configured,
-            "editing_enabled": False,
+            "editing_enabled": firestore_configured,
         },
     }
 
@@ -318,11 +322,19 @@ async def admin_overview(request: Request) -> dict[str, Any]:
             "provider": "firestore",
             "status": "configured" if settings.FIRESTORE_PROJECT_ID else "not_configured",
             "configured": bool(settings.FIRESTORE_PROJECT_ID),
-            "editing_enabled": False,
+            "editing_enabled": bool(settings.FIRESTORE_PROJECT_ID),
         },
-        "message": "Spreadsheet settings can be stored in Firestore; sync and catalog editing are not connected."
+        "firebase": {
+            "project_id": settings.FIRESTORE_PROJECT_ID,
+            "firestore_configured": bool(settings.FIRESTORE_PROJECT_ID),
+            "storage_configured": bool(
+                settings.FIRESTORE_PROJECT_ID and settings.FIREBASE_STORAGE_BUCKET
+            ),
+            "storage_bucket": settings.FIREBASE_STORAGE_BUCKET,
+        },
+        "message": "Homepage content is editable in Firestore; customer records are appended to private Google Sheets tabs."
         if settings.FIRESTORE_PROJECT_ID
-        else "Spreadsheet settings cannot be saved until Firestore and the Cloud Run service account are configured.",
+        else "Website content cannot be published until Firestore and the Cloud Run service account are configured.",
     }
 
 
@@ -490,6 +502,94 @@ def read_google_sheets_settings(request: Request) -> dict[str, Any]:
                 "message": "Google Sheets settings are not available because Firestore is not configured or reachable.",
             },
         ) from exc
+
+
+@api_router.get("/settings/site-content")
+def read_site_content(request: Request) -> dict[str, Any]:
+    _require_admin(request)
+    try:
+        return get_site_content()
+    except (RuntimeError, GoogleAPIError, GoogleAuthError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "firestore_unavailable",
+                "message": "Website content is unavailable because Firestore is not configured or reachable.",
+            },
+        ) from exc
+
+
+@api_router.put("/settings/site-content")
+def update_site_content(
+    request: Request,
+    content: SiteContent,
+    csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+) -> dict[str, Any]:
+    admin_email = _require_admin(request)
+    _require_csrf(request, csrf_token)
+    try:
+        saved = save_site_content(content, updated_by=admin_email)
+    except (RuntimeError, GoogleAPIError, GoogleAuthError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "firestore_unavailable",
+                "message": "Website content was not saved because Firestore is not configured or reachable.",
+            },
+        ) from exc
+    return {
+        "status": "saved",
+        "content": saved,
+        "message": "บันทึกและเผยแพร่ข้อมูลหน้าเว็บไซต์แล้ว",
+    }
+
+
+@api_router.get("/assets")
+def read_catalog_assets(request: Request) -> dict[str, Any]:
+    _require_admin(request)
+    try:
+        return {"assets": list_catalog_images()}
+    except (RuntimeError, GoogleAPIError, GoogleAuthError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "firebase_storage_unavailable",
+                "message": "คลังภาพ Firebase ยังไม่พร้อมใช้งาน กรุณาตรวจการตั้งค่า Storage และสิทธิ์ service account",
+            },
+        ) from exc
+
+
+@api_router.post("/assets/images", status_code=201)
+async def upload_catalog_asset(
+    request: Request,
+    file: UploadFile = File(...),
+    csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+) -> dict[str, Any]:
+    admin_email = _require_admin(request)
+    _require_csrf(request, csrf_token)
+    try:
+        data = await file.read(MAX_IMAGE_SIZE_BYTES + 1)
+        if len(data) > MAX_IMAGE_SIZE_BYTES:
+            raise HTTPException(status_code=413, detail="รูปภาพต้องมีขนาดไม่เกิน 5 MB")
+        validate_catalog_image(data, file.content_type or "")
+        return upload_catalog_image(
+            data=data,
+            content_type=file.content_type or "",
+            filename=file.filename,
+            uploaded_by=admin_email,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except (RuntimeError, GoogleAPIError, GoogleAuthError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "firebase_storage_unavailable",
+                "message": "อัปโหลดไม่สำเร็จ กรุณาตรวจ bucket และสิทธิ์ Storage ของ service account",
+            },
+        ) from exc
+    finally:
+        await file.close()
 
 
 @api_router.put("/settings/google-sheets")

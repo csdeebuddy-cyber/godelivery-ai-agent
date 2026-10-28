@@ -9,8 +9,9 @@ from app.api import admin as admin_api
 from app.api.admin import _session_signer
 from app.config import settings
 from app.api.v1.endpoints.live import _live_config
-from app.api.v1.endpoints import widget as widget_api
+from app.api.v1.endpoints import site as site_api, widget as widget_api
 from app.schemas.admin import GoogleSheetsSettings
+from app.schemas.site_content import SiteContent
 from app.services.knowledge_base import (
     get_knowledge_base_context,
     get_knowledge_base_status,
@@ -37,8 +38,8 @@ class KnowledgeBaseTests(unittest.TestCase):
                 "promotion_name": 2,
                 "conditions": 3,
             },
-            "orders_range": "orders!A2:Z",
-            "member_range": "MEMBER!A2:Z",
+            "orders_range": "orders!A:O",
+            "member_range": "MEMBER!A:F",
         }
         with (
             patch(
@@ -234,17 +235,24 @@ class KnowledgeBaseTests(unittest.TestCase):
 
         root_response = client.get("/", follow_redirects=False)
         chat_response = client.get("/chatandshop")
+        home_styles_response = client.get("/static/home.css")
+        home_script_response = client.get("/static/home.js")
         login_response = client.get("/dashboard/admin/login")
         admin_response = client.get("/dashboard/admin", follow_redirects=False)
         api_response = client.get("/api/v1/admin/status")
         robots_response = client.get("/robots.txt")
 
-        self.assertEqual(root_response.status_code, 307)
-        self.assertEqual(root_response.headers["location"], "/chatandshop")
+        self.assertEqual(root_response.status_code, 200)
+        self.assertIn("GoDelivery | 711shopping", root_response.text)
+        self.assertIn('href="/chatandshop"', root_response.text)
         self.assertIn("noindex", root_response.headers["x-robots-tag"])
         self.assertEqual(chat_response.status_code, 200)
         self.assertIn("/dashboard/admin", chat_response.text)
         self.assertIn('name="googlebot" content="noindex', chat_response.text)
+        self.assertEqual(home_styles_response.status_code, 200)
+        self.assertIn(".hero-card", home_styles_response.text)
+        self.assertEqual(home_script_response.status_code, 200)
+        self.assertIn("/api/v1/site/orders", home_script_response.text)
         self.assertEqual(login_response.status_code, 200)
         self.assertIn("smpmfast@gmail.com", login_response.text)
         self.assertIn('name="robots" content="noindex', login_response.text)
@@ -256,11 +264,261 @@ class KnowledgeBaseTests(unittest.TestCase):
         self.assertIn("Allow: /", robots_response.text)
         self.assertNotIn("Disallow: /", robots_response.text)
 
+    def test_public_site_content_is_read_only_and_returns_only_published_content(self) -> None:
+        content = SiteContent(
+            company={"title": "About", "body": "Public text"},
+            products=[
+                {
+                    "product_id": "P-1",
+                    "name": "Soap",
+                    "description": "Product description",
+                    "image_id": "0123456789abcdef0123456789abcdef",
+                    "regular_price": 25,
+                    "sale_price": 20,
+                    "stock_quantity": 4,
+                    "active": True,
+                },
+                {
+                    "product_id": "P-2",
+                    "name": "Hidden product",
+                    "description": "",
+                    "regular_price": 99,
+                    "sale_price": None,
+                    "stock_quantity": 2,
+                    "active": False,
+                },
+            ],
+            promotions=[
+                {
+                    "promotion_id": "PROMO-1",
+                    "title": "Live",
+                    "details": "Details",
+                    "active": True,
+                },
+                {
+                    "promotion_id": "PROMO-2",
+                    "title": "Hidden",
+                    "details": "Not public",
+                    "active": False,
+                },
+            ],
+        ).model_dump()
+        with patch.object(site_api, "get_site_content", return_value=content):
+            response = TestClient(app).get("/api/v1/site/content")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["company"]["body"], "Public text")
+        self.assertEqual(
+            [product["product_id"] for product in response.json()["products"]],
+            ["P-1"],
+        )
+        self.assertEqual(
+            response.json()["products"][0]["image_url"],
+            "/api/v1/site/assets/0123456789abcdef0123456789abcdef",
+        )
+        self.assertEqual(
+            [promotion["promotion_id"] for promotion in response.json()["promotions"]],
+            ["PROMO-1"],
+        )
+        self.assertEqual(response.headers["cache-control"], "no-store")
+        self.assertNotIn("updated_by", response.json())
+
+    def test_admin_site_content_requires_authentication_and_csrf_then_saves(self) -> None:
+        client = TestClient(app)
+        content = {
+            "company": {"title": "เกี่ยวกับบริษัท", "body": "ข้อมูลบริษัท"},
+            "terms": {"title": "ข้อกำหนด", "body": ""},
+            "security": {"title": "Privacy Policy", "body": "แจ้งการใช้ข้อมูล"},
+            "shipping": {"title": "การจัดส่ง", "body": ""},
+            "returns": {"title": "การคืนสินค้า", "body": ""},
+            "faqs": [{"question": "สอบถาม", "answer": "ติดต่อเรา"}],
+            "products": [],
+            "promotions": [],
+        }
+        test_secret = "test-admin-session-secret-at-least-32-characters"
+        with patch.object(settings, "ADMIN_SESSION_SECRET", test_secret):
+            unauthorized = client.get("/api/v1/admin/settings/site-content")
+            client.cookies.set(
+                "godelivery_admin_session",
+                _session_signer().dumps(
+                    {"email": "smpmfast@gmail.com", "csrf_token": "site-csrf"}
+                ),
+            )
+            with (
+                patch.object(admin_api, "get_site_content", return_value=content),
+                patch.object(admin_api, "save_site_content", return_value=content) as save,
+            ):
+                loaded = client.get("/api/v1/admin/settings/site-content")
+                missing_csrf = client.put(
+                    "/api/v1/admin/settings/site-content",
+                    json=content,
+                )
+                saved = client.put(
+                    "/api/v1/admin/settings/site-content",
+                    headers={"X-CSRF-Token": "site-csrf"},
+                    json=content,
+                )
+
+        self.assertEqual(unauthorized.status_code, 401)
+        self.assertEqual(loaded.status_code, 200)
+        self.assertEqual(missing_csrf.status_code, 403)
+        self.assertEqual(saved.status_code, 200)
+        self.assertEqual(saved.json()["status"], "saved")
+        self.assertEqual(save.call_args.kwargs["updated_by"], "smpmfast@gmail.com")
+
+    def test_site_content_rejects_duplicate_product_ids_and_invalid_sale_price(self) -> None:
+        product = {
+            "product_id": "P-1",
+            "name": "Soap",
+            "description": "",
+            "regular_price": 10,
+            "sale_price": 12,
+            "stock_quantity": 2,
+            "active": True,
+        }
+        with self.assertRaises(ValueError):
+            SiteContent(products=[product])
+
+        product["sale_price"] = 8
+        with self.assertRaises(ValueError):
+            SiteContent(products=[product, product])
+
+    def test_customer_order_checks_consent_and_appends_exact_orders_columns(self) -> None:
+        client = TestClient(app)
+        test_secret = "test-admin-session-secret-at-least-32-characters"
+        content = SiteContent(
+            products=[
+                {
+                    "product_id": "P-1",
+                    "name": "Soap",
+                    "description": "",
+                    "regular_price": 25,
+                    "sale_price": 20,
+                    "stock_quantity": 5,
+                    "active": True,
+                }
+            ],
+            security={"title": "Privacy Policy", "body": "Customer data policy"},
+        ).model_dump()
+        payload = {
+            "customer": "Test Customer",
+            "address": "123 Main Street",
+            "address1": "District",
+            "postcode": "10110",
+            "phone_number": "0812345678",
+            "items": [
+                {"product_id": "P-1", "quantity": 1},
+                {"product_id": "P-1", "quantity": 2},
+            ],
+            "remark": "Call first",
+            "privacy_consent": True,
+        }
+        with (
+            patch.object(settings, "ADMIN_SESSION_SECRET", test_secret),
+            patch.object(site_api, "get_site_content", return_value=content),
+            patch.object(
+                site_api,
+                "_configured_sheet_settings",
+                return_value={
+                    "configured": True,
+                    "spreadsheet_id": "shared-sheet-id",
+                    "orders_range": "orders!A:O",
+                    "member_range": "MEMBER!A:F",
+                },
+            ),
+            patch.object(
+                site_api,
+                "append_customer_row",
+                new=AsyncMock(return_value={"updated_range": "orders!A2:O2"}),
+            ) as append_row,
+        ):
+            no_consent = client.post(
+                "/api/v1/site/orders",
+                json={**payload, "privacy_consent": False},
+            )
+            tampered_price = client.post(
+                "/api/v1/site/orders",
+                json={**payload, "items": [{"product_id": "P-1", "quantity": 3, "price": 0}]},
+            )
+            response = client.post("/api/v1/site/orders", json=payload)
+
+        self.assertEqual(no_consent.status_code, 422)
+        self.assertEqual(tampered_price.status_code, 422)
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.json()["ordernumber"].startswith("GD"))
+        append_row.assert_awaited_once()
+        self.assertEqual(append_row.await_args.kwargs["range_name"], "orders!A:O")
+        values = append_row.await_args.kwargs["values"]
+        self.assertEqual(len(values), 15)
+        self.assertEqual(values[2:10], [
+            "เว็บไซต์",
+            "Test Customer",
+            "123 Main Street",
+            "District",
+            "10110",
+            "0812345678",
+            "Soap x 3",
+            60,
+        ])
+        self.assertIn("Call first", values[10])
+        self.assertIn("Privacy Policy", values[10])
+        self.assertEqual(values[11:15], ["เก็บเงินปลายทาง", 60, "", "รอยืนยันจากเจ้าหน้าที่"])
+
+    def test_member_registration_requires_privacy_consent_and_writes_minimal_columns(self) -> None:
+        client = TestClient(app)
+        payload = {
+            "customer": "Test Member",
+            "phone_number": "0812345678",
+            "email": "member@example.com",
+            "privacy_consent": True,
+        }
+        with (
+            patch.object(site_api, "get_site_content", return_value={
+                "security": {"title": "Privacy Policy", "body": "Customer data policy"},
+                "products": [],
+                "promotions": [],
+                "faqs": [],
+                "company": {"title": "", "body": ""},
+                "terms": {"title": "", "body": ""},
+                "shipping": {"title": "", "body": ""},
+                "returns": {"title": "", "body": ""},
+            }),
+            patch.object(
+                site_api,
+                "_configured_sheet_settings",
+                return_value={
+                    "configured": True,
+                    "spreadsheet_id": "shared-sheet-id",
+                    "member_range": "MEMBER!A:F",
+                },
+            ),
+            patch.object(
+                site_api,
+                "append_customer_row",
+                new=AsyncMock(return_value={"updated_range": "MEMBER!A2:F2"}),
+            ) as append_row,
+        ):
+            rejected = client.post(
+                "/api/v1/site/members",
+                json={**payload, "privacy_consent": False},
+            )
+            response = client.post("/api/v1/site/members", json=payload)
+
+        self.assertEqual(rejected.status_code, 422)
+        self.assertEqual(response.status_code, 201)
+        values = append_row.await_args.kwargs["values"]
+        self.assertEqual(len(values), 6)
+        self.assertEqual(values[2:5], ["Test Member", "0812345678", "member@example.com"])
+        self.assertIn("Privacy Policy", values[5])
+
     def test_admin_session_requires_allowed_email_and_disables_unconfigured_storage(self) -> None:
         client = TestClient(app)
         test_secret = "test-admin-session-secret-at-least-32-characters"
 
-        with patch.object(settings, "ADMIN_SESSION_SECRET", test_secret):
+        with (
+            patch.object(settings, "ADMIN_SESSION_SECRET", test_secret),
+            patch.object(settings, "FIRESTORE_PROJECT_ID", None),
+        ):
             allowed_cookie = _session_signer().dumps(
                 {"email": "smpmfast@gmail.com", "csrf_token": "test-csrf-token"}
             )
@@ -284,6 +542,7 @@ class KnowledgeBaseTests(unittest.TestCase):
             patch.object(settings, "ADMIN_GOOGLE_CLIENT_SECRET", None),
             patch.object(settings, "ADMIN_OAUTH_REDIRECT_URI", None),
             patch.object(settings, "ADMIN_SESSION_SECRET", None),
+            patch.object(settings, "FIRESTORE_PROJECT_ID", None),
         ):
             status = client.get("/api/v1/admin/status")
             login = client.get("/admin/auth/google/login")
@@ -377,8 +636,8 @@ class KnowledgeBaseTests(unittest.TestCase):
             product_columns=payload["product_columns"],
             promotion_range=payload["promotion_range"],
             promotion_columns=payload["promotion_columns"],
-            orders_range="orders!A2:Z",
-            member_range="MEMBER!A2:Z",
+            orders_range="orders!A:O",
+            member_range="MEMBER!A:F",
             updated_by="smpmfast@gmail.com",
         )
 
@@ -463,8 +722,8 @@ class KnowledgeBaseTests(unittest.TestCase):
                 "range": "product!A2:E",
             }
         )
-        self.assertEqual(defaults.orders_range, "orders!A2:Z")
-        self.assertEqual(defaults.member_range, "MEMBER!A2:Z")
+        self.assertEqual(defaults.orders_range, "orders!A:O")
+        self.assertEqual(defaults.member_range, "MEMBER!A:F")
 
     def test_sheets_settings_validate_input_and_return_unavailable_if_firestore_missing(self) -> None:
         client = TestClient(app)
