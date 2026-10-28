@@ -17,17 +17,20 @@ FastAPI chat application with a Gemini Live real-time voice session and browser 
 
 ## Admin dashboard and Google SSO
 
-- Customer voice page: `https://sesame.godelivery.co.th/chatandshop` after the custom domain is mapped (the service root redirects to `/chatandshop`).
-- Admin login/dashboard: `https://sesame.godelivery.co.th/dashboard/admin`; the admin link is also available on the voice page.
+- Public service domain: `https://711shopping.com` (after DNS and Cloud Run domain mapping are configured).
+- Customer voice page: `https://711shopping.com/chatandshop` (the service root redirects to `/chatandshop`).
+- Admin login/dashboard: `https://711shopping.com/dashboard/admin`; the admin link is also available on the voice page.
+- Before publishing, map `711shopping.com` to the Cloud Run service, configure its DNS and HTTPS certificate, and set `ADMIN_OAUTH_REDIRECT_URI=https://711shopping.com/admin/auth/google/callback` in the production service. Register that same callback URL in the Google OAuth client.
 - Google sign-in is restricted server-side to the verified account `smpmfast@gmail.com`.
 - OAuth configuration is not included. Set `ADMIN_GOOGLE_CLIENT_ID`, `ADMIN_GOOGLE_CLIENT_SECRET`, `ADMIN_OAUTH_REDIRECT_URI`, and a strong random `ADMIN_SESSION_SECRET` (at least 32 characters) using Secret Manager in production. Never commit these values.
 - Set the Gemini key as a Secret Manager secret named `GEMINI_API_KEY`, then bind it to the Cloud Run service as the `GEMINI_API_KEY` environment variable. The admin page shows only whether the variable is present; it never accepts or returns the key. After changing a secret, deploy a new Cloud Run revision so the running app loads it.
-- Register the exact redirect URI `https://sesame.godelivery.co.th/admin/auth/google/callback` in the Google OAuth client, and use the matching deployed domain. For local testing, register a separate localhost redirect URI and set it in `.env`.
+- Register the exact redirect URI `https://711shopping.com/admin/auth/google/callback` in the Google OAuth client, and use the matching deployed domain. For local testing, register a separate localhost redirect URI and set it in `.env`.
 - The OAuth authorization-code flow uses signed state, PKCE, verified Google ID tokens, an exact email allowlist, and an HttpOnly session cookie.
 - `GET /api/v1/admin/status` reports whether SSO is configured. `GET /api/v1/admin/overview` is protected by the signed admin session.
-- The dashboard can store the non-secret Google Sheets Spreadsheet ID and range in Firestore through `PUT /api/v1/admin/settings/google-sheets`. Configure `FIRESTORE_PROJECT_ID` and grant the Cloud Run service account Firestore access first. This stores configuration only; it does not read the sheet, sync data, or update the catalog. The current preview endpoints do not save product or promotion data.
+- The dashboard stores one Google Sheets Spreadsheet ID and separate ranges/mappings in Firestore through `PUT /api/v1/admin/settings/google-sheets`. Defaults: `product!A2:E` maps ID, name, regular price, sale price, and stock quantity; `promotion!A2:C` maps promotion ID, name, and conditions; `orders!A2:Z` and `MEMBER!A2:Z` reserve the private order/member tabs. The admin-only `GET /api/v1/admin/settings/google-sheets/preview` reads only the product and promotion ranges from that same Spreadsheet ID and returns a non-persisting preview. It never reads orders or MEMBER and does not publish to the knowledge base. Configure `FIRESTORE_PROJECT_ID`, Google Sheets API access, and share the spreadsheet with the Cloud Run service account first.
+- The admin dashboard can create, edit, and deactivate embeddable chat widget profiles at `/api/v1/admin/widget-sites`. Each profile stores its allowed website hostnames and display settings in the same Firestore project, then generates a copyable install snippet. Share the snippet with the site owner to install on the advertising or landing page. The widget talks to the central `/api/v1/widget/chat` endpoint and uses the existing central knowledge base. Firestore must be configured; widget chat and preflight requests are restricted to the exact registered hostname in the browser `Origin` header. Add each hostname separately (for example `example.com` and `www.example.com`); do not enter a URL path.
 - For Google Sheets, use the Cloud Run service account identity (Application Default Credentials), enable the Google Sheets API, and share the spreadsheet with that service account with Viewer access. Do not upload a service-account JSON key through the admin page.
-- In Google Cloud, create the Firestore database and grant the Cloud Run runtime service account the minimum Firestore permissions needed to read/write the `admin_settings` document. Also grant it access to the Google Sheets API; then set `FIRESTORE_PROJECT_ID` in the Cloud Run service. The sheet settings form will remain unavailable until this is configured and reachable.
+- In Google Cloud, create the Firestore database and grant the Cloud Run runtime service account the minimum Firestore permissions needed to read/write the `admin_settings` document and `chat_widget_sites` collection. Also grant it access to the Google Sheets API; then set `FIRESTORE_PROJECT_ID` in the Cloud Run service. The sheet settings form will remain unavailable until this is configured and reachable.
 - This initial scaffold does not configure Google Cloud domain mapping, OAuth consent-screen settings, Firestore, or Cloud Run secrets. Complete those deployment settings before enabling admin sign-in.
 
 ## Search indexing
@@ -49,6 +52,12 @@ The defaults match the requested AI Studio settings:
 Each setting can be overridden with the corresponding `GEMINI_LIVE_*` environment variable. The browser streams 16 kHz PCM microphone audio to the FastAPI WebSocket endpoint at `/api/v1/live`; Gemini Live audio is played back from 24 kHz PCM response chunks. Microphone access requires localhost or HTTPS.
 
 The standard `/api/v1/chat` endpoint remains available for non-live text generation.
+
+## Embeddable chat widget
+
+Sign in to `/dashboard/admin`, create a widget profile with the website's exact hostname(s), and copy the generated snippet to send to its owner. The owner installs both script tags in the page HTML, preferably near the closing `</body>` tag. The site-specific appearance and `siteId` are included in the snippet; the JavaScript SDK is served centrally from `/static/widget.js`, and messages are handled by `/api/v1/widget/chat`. No Gemini key or other secret is exposed to the website.
+
+The widget needs a public HTTPS deployment and a reachable Firestore-backed site profile. The API validates the browser origin against that profile and returns CORS permission only for an allowed origin. This browser-origin check is an integration control, not strong client authentication: site IDs and install snippets are public, and non-browser callers can forge an `Origin` header. Add server-side rate limiting and abuse monitoring before using the endpoint for high-volume public advertising traffic.
 
 The Live microphone session stays connected across multiple user turns. Use the microphone button to pause/resume audio, and close the browser connection to end the Live session.
 
@@ -73,6 +82,6 @@ The API also exposes:
 
 Google Sheets is not connected, and Google service-account credentials are not included. Do not commit `config/google_credentials.json`; use an approved secret store if a Google Sheets connection is added.
 
-An isolated future connector stub is available at `server/services/sheetService.js`. Its `readProductsFromSheet(spreadsheetId, range)` function is read-only and returns rows for review; it does not write `catalog.json` and is not connected to the API. To use it later, install the Node.js `googleapis` package and provide credentials through `GOOGLE_APPLICATION_CREDENTIALS` or the ignored `config/google_credentials.json` file. Review the data through the preview endpoint before any approved import.
+The optional Node.js readers in `server/services/sheetService.js` map 1-based column positions for product and promotion tabs; they remain read-only and are not used by the FastAPI preview endpoint. The connected admin preview uses Google Application Default Credentials and the Python Google Auth dependency to read only the public product and promotion ranges. Neither path writes `catalog.json` or activates promotions.
 
 Run the local knowledge-base tests with `python -m unittest discover -s tests`.

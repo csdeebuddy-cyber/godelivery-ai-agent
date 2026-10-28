@@ -10,6 +10,8 @@ class ProductImportRecord(BaseModel):
     name: str = Field(..., min_length=1, max_length=300)
     category: str | None = Field(default=None, max_length=200)
     price_regular: Decimal | None = Field(default=None, gt=0)
+    price_sale: Decimal | None = Field(default=None, gt=0)
+    stock_quantity: int | None = Field(default=None, ge=0)
     unit: str | None = Field(default=None, max_length=200)
     highlights: list[str] = Field(default_factory=list, max_length=20)
     voice_script: str | None = Field(default=None, max_length=2000)

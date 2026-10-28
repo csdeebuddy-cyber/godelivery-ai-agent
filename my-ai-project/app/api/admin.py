@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import json
 import secrets
 from pathlib import Path
 from typing import Any
@@ -17,11 +18,19 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from app.config import settings
 from app.schemas.admin import GoogleSheetsSettings
+from app.schemas.widget import WidgetSiteSettings
 from app.services.admin_settings import (
     get_google_sheets_settings,
     save_google_sheets_settings,
 )
 from app.services.knowledge_base import get_knowledge_base_status
+from app.services.google_sheets_knowledge import preview_google_sheets_knowledge
+from app.services.widget_sites import (
+    delete_widget_site,
+    get_widget_site,
+    list_widget_sites,
+    save_widget_site,
+)
 
 
 router = APIRouter(tags=["admin"])
@@ -334,6 +343,140 @@ def _session_csrf_token(request: Request) -> str:
     return csrf_token
 
 
+def _widget_site_response(site: dict[str, Any], base_url: str) -> dict[str, Any]:
+    config = {
+        "siteId": site["site_id"],
+        "title": site["title"],
+        "assistantName": site["assistant_name"],
+        "launchText": site["launch_text"],
+        "placeholder": site["placeholder"],
+        "primaryColor": site["primary_color"],
+        "speechLanguage": site["speech_language"],
+        "voice": site["voice"],
+    }
+    config_json = (
+        json.dumps(config, ensure_ascii=True, separators=(",", ":"))
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
+    script_url = f"{base_url.rstrip('/')}/static/widget.js"
+    embed_code = (
+        "<script>\n"
+        f"  window.GodeliveryChatConfig = {config_json};\n"
+        "</script>\n"
+        f'<script src="{script_url}" defer></script>'
+    )
+    return {
+        "site_id": site["site_id"],
+        "name": site["name"],
+        "allowed_domains": site["allowed_domains"],
+        "title": site["title"],
+        "assistant_name": site["assistant_name"],
+        "launch_text": site["launch_text"],
+        "placeholder": site["placeholder"],
+        "primary_color": site["primary_color"],
+        "speech_language": site["speech_language"],
+        "voice": site["voice"],
+        "embed_code": embed_code,
+    }
+
+
+@api_router.get("/widget-sites")
+def read_widget_sites(request: Request) -> dict[str, Any]:
+    _require_admin(request)
+    try:
+        sites = list_widget_sites()
+    except (RuntimeError, GoogleAPIError, GoogleAuthError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "firestore_unavailable",
+                "message": "Widget sites are unavailable because Firestore is not configured or reachable.",
+            },
+        ) from exc
+    return {
+        "sites": [_widget_site_response(site, str(request.base_url)) for site in sites]
+    }
+
+
+@api_router.post("/widget-sites")
+def create_widget_site(
+    request: Request,
+    configuration: WidgetSiteSettings,
+    csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+) -> dict[str, Any]:
+    admin_email = _require_admin(request)
+    _require_csrf(request, csrf_token)
+    site_id = secrets.token_urlsafe(12)
+    try:
+        site = save_widget_site(
+            site_id=site_id,
+            configuration=configuration.model_dump(),
+            created_by=admin_email,
+        )
+    except (RuntimeError, GoogleAPIError, GoogleAuthError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "firestore_unavailable",
+                "message": "Widget site was not saved because Firestore is not configured or reachable.",
+            },
+        ) from exc
+    return _widget_site_response(site, str(request.base_url))
+
+
+@api_router.put("/widget-sites/{site_id}")
+def update_widget_site(
+    site_id: str,
+    request: Request,
+    configuration: WidgetSiteSettings,
+    csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+) -> dict[str, Any]:
+    admin_email = _require_admin(request)
+    _require_csrf(request, csrf_token)
+    try:
+        if get_widget_site(site_id) is None:
+            raise HTTPException(status_code=404, detail="Widget site not found.")
+        site = save_widget_site(
+            site_id=site_id,
+            configuration=configuration.model_dump(),
+            created_by=admin_email,
+        )
+    except (RuntimeError, GoogleAPIError, GoogleAuthError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "firestore_unavailable",
+                "message": "Widget site was not updated because Firestore is not configured or reachable.",
+            },
+        ) from exc
+    return _widget_site_response(site, str(request.base_url))
+
+
+@api_router.delete("/widget-sites/{site_id}", status_code=204)
+def remove_widget_site(
+    site_id: str,
+    request: Request,
+    csrf_token: str | None = Header(default=None, alias="X-CSRF-Token"),
+) -> Response:
+    _require_admin(request)
+    _require_csrf(request, csrf_token)
+    try:
+        if get_widget_site(site_id) is None:
+            raise HTTPException(status_code=404, detail="Widget site not found.")
+        delete_widget_site(site_id)
+    except (RuntimeError, GoogleAPIError, GoogleAuthError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "firestore_unavailable",
+                "message": "Widget site was not removed because Firestore is not configured or reachable.",
+            },
+        ) from exc
+    return Response(status_code=204)
+
+
 @api_router.get("/settings/google-sheets")
 def read_google_sheets_settings(request: Request) -> dict[str, Any]:
     _require_admin(request)
@@ -361,6 +504,11 @@ def update_google_sheets_settings(
         saved = save_google_sheets_settings(
             spreadsheet_id=configuration.spreadsheet_id,
             range_name=configuration.range,
+            product_columns=configuration.product_columns.model_dump(),
+            promotion_range=configuration.promotion_range,
+            promotion_columns=configuration.promotion_columns.model_dump(),
+            orders_range=configuration.orders_range,
+            member_range=configuration.member_range,
             updated_by=admin_email,
         )
     except (RuntimeError, GoogleAPIError, GoogleAuthError) as exc:
@@ -374,5 +522,42 @@ def update_google_sheets_settings(
     return {
         "status": "saved",
         "settings": saved,
-        "message": "Spreadsheet settings saved to Firestore. Data sync is not enabled yet.",
+        "message": "Spreadsheet settings saved. Use the preview action to read public product and promotion tabs; orders and MEMBER remain restricted.",
     }
+
+
+@api_router.get("/settings/google-sheets/preview")
+async def preview_google_sheets_settings(request: Request) -> dict[str, Any]:
+    _require_admin(request)
+    try:
+        configuration = get_google_sheets_settings()
+        if not configuration["configured"]:
+            raise HTTPException(
+                status_code=409,
+                detail="Save Google Sheets settings before requesting a preview.",
+            )
+        return await preview_google_sheets_knowledge(configuration)
+    except (RuntimeError, GoogleAPIError, GoogleAuthError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "google_sheets_unavailable",
+                "message": "Google Sheets could not be read. Check Firestore, service account access, and the spreadsheet sharing settings.",
+            },
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "google_sheets_request_failed",
+                "message": "Google Sheets rejected the read request. Verify the spreadsheet ID, tab names, ranges, and service-account access.",
+            },
+        ) from exc
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "google_sheets_preview_invalid",
+                "message": str(exc),
+            },
+        ) from exc

@@ -1,5 +1,6 @@
+import asyncio
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -8,14 +9,226 @@ from app.api import admin as admin_api
 from app.api.admin import _session_signer
 from app.config import settings
 from app.api.v1.endpoints.live import _live_config
+from app.api.v1.endpoints import widget as widget_api
+from app.schemas.admin import GoogleSheetsSettings
 from app.services.knowledge_base import (
     get_knowledge_base_context,
     get_knowledge_base_status,
     search_knowledge_base,
 )
+from app.services.google_sheets_knowledge import preview_google_sheets_knowledge
 
 
 class KnowledgeBaseTests(unittest.TestCase):
+    def test_google_sheets_knowledge_preview_reads_public_tabs_from_one_spreadsheet(self) -> None:
+        configuration = {
+            "spreadsheet_id": "shared-sheet-id",
+            "range": "product!A2:E",
+            "product_columns": {
+                "product_id": 1,
+                "product_name": 2,
+                "regular_price": 3,
+                "selling_price": 4,
+                "stock_quantity": 5,
+            },
+            "promotion_range": "promotion!A2:C",
+            "promotion_columns": {
+                "promotion_id": 1,
+                "promotion_name": 2,
+                "conditions": 3,
+            },
+            "orders_range": "orders!A2:Z",
+            "member_range": "MEMBER!A2:Z",
+        }
+        with (
+            patch(
+                "app.services.google_sheets_knowledge._access_token",
+                return_value="token",
+            ),
+            patch(
+                "app.services.google_sheets_knowledge._read_values",
+                new=AsyncMock(
+                    side_effect=[
+                        [["SKU-1", "Product", "100", "80", "5"]],
+                        [["PROMO-1", "Special", "Buy two, save 20%"]],
+                    ]
+                ),
+            ) as read_values,
+        ):
+            result = asyncio.run(preview_google_sheets_knowledge(configuration))
+
+        self.assertEqual(result["spreadsheet_id"], "shared-sheet-id")
+        self.assertEqual(result["products"][0]["id"], "SKU-1")
+        self.assertEqual(result["products"][0]["price_sale"], 80)
+        self.assertEqual(result["promotions"][0]["promo_id"], "PROMO-1")
+        self.assertEqual(result["promotions"][0]["details"], "Buy two, save 20%")
+        self.assertFalse(result["persisted"])
+        self.assertFalse(result["private_tabs"]["read"])
+        self.assertEqual(read_values.call_count, 2)
+        self.assertEqual(
+            [call.kwargs["spreadsheet_id"] for call in read_values.call_args_list],
+            ["shared-sheet-id", "shared-sheet-id"],
+        )
+        self.assertEqual(
+            [call.kwargs["range_name"] for call in read_values.call_args_list],
+            ["product!A2:E", "promotion!A2:C"],
+        )
+
+    def test_admin_sheets_preview_is_protected_and_reads_saved_configuration(self) -> None:
+        client = TestClient(app)
+        test_secret = "test-admin-session-secret-at-least-32-characters"
+        preview = {
+            "spreadsheet_id": "shared-sheet-id",
+            "products_range": "product!A2:E",
+            "promotions_range": "promotion!A2:C",
+            "products": [{"id": "SKU-1", "name": "Product"}],
+            "promotions": [{"promo_id": "PROMO-1", "title": "Deal"}],
+            "private_tabs": {
+                "orders_range": "orders!A2:Z",
+                "member_range": "MEMBER!A2:Z",
+                "read": False,
+            },
+            "persisted": False,
+        }
+        with patch.object(settings, "ADMIN_SESSION_SECRET", test_secret):
+            unauthorized = client.get("/api/v1/admin/settings/google-sheets/preview")
+            client.cookies.set(
+                "godelivery_admin_session",
+                _session_signer().dumps(
+                    {"email": "smpmfast@gmail.com", "csrf_token": "csrf-allowed"}
+                ),
+            )
+            with (
+                patch.object(
+                    admin_api,
+                    "get_google_sheets_settings",
+                    return_value={"configured": True, "spreadsheet_id": "shared-sheet-id"},
+                ),
+                patch.object(
+                    admin_api,
+                    "preview_google_sheets_knowledge",
+                    new=AsyncMock(return_value=preview),
+                ) as read_preview,
+            ):
+                response = client.get("/api/v1/admin/settings/google-sheets/preview")
+
+        self.assertEqual(unauthorized.status_code, 401)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), preview)
+        read_preview.assert_awaited_once()
+
+    def test_widget_site_creation_requires_admin_and_generates_install_snippet(self) -> None:
+        client = TestClient(app)
+        test_secret = "test-admin-session-secret-at-least-32-characters"
+        payload = {
+            "name": "Campaign landing page",
+            "allowed_domains": ["www.example.com", "example.com"],
+            "title": "GoDelivery",
+            "assistant_name": "ผู้ช่วย",
+            "launch_text": "ถามเรื่องโปรโมชั่น",
+            "placeholder": "พิมพ์คำถาม",
+            "primary_color": "#ff6600",
+            "speech_language": "th-TH",
+            "voice": "all-day",
+        }
+
+        with patch.object(settings, "ADMIN_SESSION_SECRET", test_secret):
+            unauthorized = client.post("/api/v1/admin/widget-sites", json=payload)
+            client.cookies.set(
+                "godelivery_admin_session",
+                _session_signer().dumps(
+                    {"email": "smpmfast@gmail.com", "csrf_token": "csrf-allowed"}
+                ),
+            )
+            invalid_csrf = client.post("/api/v1/admin/widget-sites", json=payload)
+            with patch.object(
+                admin_api,
+                "save_widget_site",
+                side_effect=lambda *, site_id, configuration, created_by: {
+                    "site_id": site_id,
+                    **configuration,
+                },
+            ):
+                created = client.post(
+                    "/api/v1/admin/widget-sites",
+                    json=payload,
+                    headers={"X-CSRF-Token": "csrf-allowed"},
+                )
+
+        self.assertEqual(unauthorized.status_code, 401)
+        self.assertEqual(invalid_csrf.status_code, 403)
+        self.assertEqual(created.status_code, 200)
+        self.assertIn('"siteId":"', created.json()["embed_code"])
+        self.assertIn("http://testserver/static/widget.js", created.json()["embed_code"])
+        self.assertEqual(created.json()["allowed_domains"], ["www.example.com", "example.com"])
+
+    def test_widget_site_rejects_url_paths_in_allowed_domain(self) -> None:
+        client = TestClient(app)
+        test_secret = "test-admin-session-secret-at-least-32-characters"
+        payload = {
+            "name": "Campaign",
+            "allowed_domains": ["https://example.com/landing"],
+        }
+        with patch.object(settings, "ADMIN_SESSION_SECRET", test_secret):
+            client.cookies.set(
+                "godelivery_admin_session",
+                _session_signer().dumps(
+                    {"email": "smpmfast@gmail.com", "csrf_token": "csrf-allowed"}
+                ),
+            )
+            response = client.post(
+                "/api/v1/admin/widget-sites",
+                json=payload,
+                headers={"X-CSRF-Token": "csrf-allowed"},
+            )
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_widget_chat_accepts_allowed_domain_and_rejects_other_origins(self) -> None:
+        client = TestClient(app)
+        site = {"site_id": "site-test", "allowed_domains": ["ads.example.com"]}
+        with (
+            patch.object(widget_api, "get_widget_site", return_value=site),
+            patch.object(widget_api, "AIService") as service_class,
+        ):
+            service_class.return_value.generate_response = AsyncMock(
+                return_value="คำตอบจากระบบกลาง"
+            )
+            preflight = client.options(
+                "/api/v1/widget/chat",
+                params={"site_id": "site-test"},
+                headers={
+                    "Origin": "https://ads.example.com",
+                    "Access-Control-Request-Method": "POST",
+                    "Access-Control-Request-Headers": "content-type",
+                },
+            )
+            allowed = client.post(
+                "/api/v1/widget/chat",
+                params={"site_id": "site-test"},
+                headers={"Origin": "https://ads.example.com"},
+                json={"message": "มีโปรโมชั่นอะไรบ้าง"},
+            )
+            blocked = client.post(
+                "/api/v1/widget/chat",
+                params={"site_id": "site-test"},
+                headers={"Origin": "https://attacker.example"},
+                json={"message": "hello"},
+            )
+
+        self.assertEqual(preflight.status_code, 204)
+        self.assertEqual(
+            preflight.headers["access-control-allow-origin"],
+            "https://ads.example.com",
+        )
+        self.assertEqual(allowed.status_code, 200)
+        self.assertEqual(allowed.json()["reply"], "คำตอบจากระบบกลาง")
+        self.assertEqual(
+            allowed.headers["access-control-allow-origin"],
+            "https://ads.example.com",
+        )
+        self.assertEqual(blocked.status_code, 403)
+
     def test_customer_and_admin_routes_are_available(self) -> None:
         client = TestClient(app)
 
@@ -101,7 +314,20 @@ class KnowledgeBaseTests(unittest.TestCase):
         test_secret = "test-admin-session-secret-at-least-32-characters"
         payload = {
             "spreadsheet_id": "1Abcdefghijklmnopqrstuvwxyz0123456789",
-            "range": "Products!A2:E",
+            "range": "product!A2:E",
+            "product_columns": {
+                "product_id": 1,
+                "product_name": 2,
+                "regular_price": 3,
+                "selling_price": 4,
+                "stock_quantity": 5,
+            },
+            "promotion_range": "promotion!A2:C",
+            "promotion_columns": {
+                "promotion_id": 1,
+                "promotion_name": 2,
+                "conditions": 3,
+            },
         }
 
         with patch.object(settings, "ADMIN_SESSION_SECRET", test_secret):
@@ -127,6 +353,11 @@ class KnowledgeBaseTests(unittest.TestCase):
                     "configured": True,
                     "spreadsheet_id": payload["spreadsheet_id"],
                     "range": payload["range"],
+                    "product_columns": payload["product_columns"],
+                    "promotion_range": payload["promotion_range"],
+                    "promotion_columns": payload["promotion_columns"],
+                    "orders_range": "orders!A2:Z",
+                    "member_range": "MEMBER!A2:Z",
                 },
             ) as save_settings:
                 saved = client.put(
@@ -139,12 +370,101 @@ class KnowledgeBaseTests(unittest.TestCase):
         self.assertEqual(invalid_csrf.status_code, 403)
         self.assertEqual(saved.status_code, 200)
         self.assertEqual(saved.json()["status"], "saved")
-        self.assertIn("not enabled yet", saved.json()["message"])
+        self.assertIn("preview action", saved.json()["message"])
         save_settings.assert_called_once_with(
             spreadsheet_id=payload["spreadsheet_id"],
             range_name=payload["range"],
+            product_columns=payload["product_columns"],
+            promotion_range=payload["promotion_range"],
+            promotion_columns=payload["promotion_columns"],
+            orders_range="orders!A2:Z",
+            member_range="MEMBER!A2:Z",
             updated_by="smpmfast@gmail.com",
         )
+
+    def test_sheets_settings_validate_unique_column_mapping_and_support_defaults(self) -> None:
+        client = TestClient(app)
+        test_secret = "test-admin-session-secret-at-least-32-characters"
+        payload = {
+            "spreadsheet_id": "1Abcdefghijklmnopqrstuvwxyz0123456789",
+            "range": "product!A2:E",
+            "promotion_range": "promotion!A2:C",
+            "product_columns": {
+                "product_id": 1,
+                "product_name": 2,
+                "regular_price": 3,
+                "selling_price": 4,
+                "stock_quantity": 4,
+            },
+            "promotion_columns": {
+                "promotion_id": 1,
+                "promotion_name": 2,
+                "conditions": 2,
+            },
+        }
+
+        with patch.object(settings, "ADMIN_SESSION_SECRET", test_secret):
+            client.cookies.set(
+                "godelivery_admin_session",
+                _session_signer().dumps(
+                    {"email": "smpmfast@gmail.com", "csrf_token": "csrf-allowed"}
+                ),
+            )
+            duplicate_column = client.put(
+                "/api/v1/admin/settings/google-sheets",
+                json=payload,
+                headers={"X-CSRF-Token": "csrf-allowed"},
+            )
+
+        self.assertEqual(duplicate_column.status_code, 422)
+        payload["product_columns"]["stock_quantity"] = 5
+        promotion_duplicate_column = client.put(
+            "/api/v1/admin/settings/google-sheets",
+            json=payload,
+            headers={"X-CSRF-Token": "csrf-allowed"},
+        )
+        self.assertEqual(promotion_duplicate_column.status_code, 422)
+        self.assertEqual(
+            GoogleSheetsSettings.model_validate(
+                {
+                    "spreadsheet_id": "1Abcdefghijklmnopqrstuvwxyz0123456789",
+                    "range": "product!A2:E",
+                }
+            ).product_columns.model_dump(),
+            {
+                "product_id": 1,
+                "product_name": 2,
+                "regular_price": 3,
+                "selling_price": 4,
+                "stock_quantity": 5,
+            },
+        )
+        self.assertEqual(
+            GoogleSheetsSettings.model_validate(
+                {
+                    "spreadsheet_id": "1Abcdefghijklmnopqrstuvwxyz0123456789",
+                    "range": "product!A2:E",
+                }
+            ).promotion_range,
+            "promotion!A2:C",
+        )
+        self.assertEqual(
+            GoogleSheetsSettings.model_validate(
+                {
+                    "spreadsheet_id": "1Abcdefghijklmnopqrstuvwxyz0123456789",
+                    "range": "product!A2:E",
+                }
+            ).promotion_columns.model_dump(),
+            {"promotion_id": 1, "promotion_name": 2, "conditions": 3},
+        )
+        defaults = GoogleSheetsSettings.model_validate(
+            {
+                "spreadsheet_id": "1Abcdefghijklmnopqrstuvwxyz0123456789",
+                "range": "product!A2:E",
+            }
+        )
+        self.assertEqual(defaults.orders_range, "orders!A2:Z")
+        self.assertEqual(defaults.member_range, "MEMBER!A2:Z")
 
     def test_sheets_settings_validate_input_and_return_unavailable_if_firestore_missing(self) -> None:
         client = TestClient(app)
@@ -269,6 +589,28 @@ class KnowledgeBaseTests(unittest.TestCase):
             ["category", "highlights", "price_regular", "unit", "voice_script"],
         )
         self.assertEqual(get_knowledge_base_status()["products"], 1)
+
+    def test_product_preview_accepts_sheet_price_and_stock_fields_but_does_not_publish_them(self) -> None:
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/knowledge/products/preview",
+            json=[
+                {
+                    "id": "SHEET-001",
+                    "name": "ตัวอย่างสินค้า",
+                    "price_regular": 500,
+                    "price_sale": 450,
+                    "stock_quantity": 12,
+                }
+            ],
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["persisted"])
+        self.assertEqual(
+            response.json()["products"][0]["excluded_unverified_fields"],
+            ["price_regular", "price_sale", "stock_quantity"],
+        )
 
     def test_promotion_import_preview_does_not_activate_unverified_promotion(self) -> None:
         client = TestClient(app)

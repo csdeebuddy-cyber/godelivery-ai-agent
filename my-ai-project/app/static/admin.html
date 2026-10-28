@@ -70,26 +70,103 @@
         <a class="secondary-button" href="/api/v1/knowledge/promotions" target="_blank" rel="noopener">ดูโปรโมชั่น</a>
       </div>
       <div class="notice notice-warning">
-        การแก้ไขสินค้า/โปรโมชั่นและการเผยแพร่ยังไม่เปิดใช้งาน ส่วนฟอร์ม Google Sheets ด้านล่างบันทึกได้เฉพาะค่า Spreadsheet ID และช่วงข้อมูลเท่านั้น
+        การแก้ไขสินค้า/โปรโมชั่นและการเผยแพร่ยังไม่เปิดใช้งาน ส่วนฟอร์ม Google Sheets ด้านล่างบันทึกการเชื่อมต่อและ mapping คอลัมน์เท่านั้น
       </div>
     </section>
 
     <section class="management-panel settings-panel">
       <div>
         <div class="eyebrow">GOOGLE SHEETS</div>
-        <h2>ตั้งค่าชีตสินค้า</h2>
-        <p class="muted">กรอกเฉพาะ Spreadsheet ID และช่วงข้อมูล ค่าจะถูกเก็บใน Firestore</p>
+        <h2>ตั้งค่า Knowledge จาก Google Sheets</h2>
+        <p class="muted">ใช้ Spreadsheet ID เดียวและกำหนดแท็บแยกตามประเภทข้อมูล ระบบจะบันทึกการตั้งค่าไว้ใน Firestore</p>
       </div>
       <form id="sheets-settings-form" class="settings-form">
         <label for="spreadsheet-id">Spreadsheet ID</label>
         <input id="spreadsheet-id" name="spreadsheet_id" type="text" maxlength="200" placeholder="ID จาก URL ของ Google Sheet" required>
-        <label for="sheet-range">ช่วงข้อมูล (A1 notation)</label>
-        <input id="sheet-range" name="range" type="text" maxlength="200" value="Products!A2:E" required>
+        <label for="sheet-range">แท็บ/ช่วงข้อมูลสินค้า (A1 notation)</label>
+        <input id="sheet-range" name="range" type="text" maxlength="200" value="product!A2:E" required>
+        <fieldset class="sheet-column-mapping">
+          <legend>จับคู่คอลัมน์สินค้า</legend>
+          <p class="muted">ระบุตำแหน่งคอลัมน์ภายในช่วงข้อมูล เริ่มนับจาก 1 เช่น product!A2:E: ตำแหน่ง 1 คือคอลัมน์ A</p>
+          <div class="sheet-column-grid">
+            <label for="sheet-column-id">รหัสสินค้า</label>
+            <input id="sheet-column-id" type="number" min="1" max="100" value="1" required>
+            <label for="sheet-column-name">ชื่อสินค้า</label>
+            <input id="sheet-column-name" type="number" min="1" max="100" value="2" required>
+            <label for="sheet-column-regular-price">ราคาปกติ</label>
+            <input id="sheet-column-regular-price" type="number" min="1" max="100" value="3" required>
+            <label for="sheet-column-selling-price">ราคาขาย</label>
+            <input id="sheet-column-selling-price" type="number" min="1" max="100" value="4" required>
+            <label for="sheet-column-stock">จำนวนสินค้าคงเหลือ</label>
+            <input id="sheet-column-stock" type="number" min="1" max="100" value="5" required>
+          </div>
+        </fieldset>
+        <label for="promotion-sheet-range">แท็บ/ช่วงข้อมูลโปรโมชั่น (A1 notation)</label>
+        <input id="promotion-sheet-range" name="promotion_range" type="text" maxlength="200" value="promotion!A2:C" required>
+        <fieldset class="sheet-column-mapping">
+          <legend>จับคู่คอลัมน์โปรโมชั่น</legend>
+          <p class="muted">ระบุตำแหน่งคอลัมน์ภายในช่วงข้อมูล เริ่มนับจาก 1 เช่น promotion!A2:C: ตำแหน่ง 1 คือคอลัมน์ A เงื่อนไขจะถูกส่งเป็นรายละเอียดโปรโมชั่นเพื่อให้ตรวจสอบ</p>
+          <div class="sheet-column-grid">
+            <label for="sheet-column-promotion-id">รหัสโปรโมชั่น</label>
+            <input id="sheet-column-promotion-id" type="number" min="1" max="100" value="1" required>
+            <label for="sheet-column-promotion-name">ชื่อโปรโมชั่น</label>
+            <input id="sheet-column-promotion-name" type="number" min="1" max="100" value="2" required>
+            <label for="sheet-column-promotion-conditions">เงื่อนไขโปรโมชั่น</label>
+            <input id="sheet-column-promotion-conditions" type="number" min="1" max="100" value="3" required>
+          </div>
+        </fieldset>
+        <label for="orders-sheet-range">แท็บข้อมูลคำสั่งซื้อ (A1 notation)</label>
+        <input id="orders-sheet-range" name="orders_range" type="text" maxlength="200" value="orders!A2:Z" required>
+        <label for="member-sheet-range">แท็บข้อมูลสมาชิก (A1 notation)</label>
+        <input id="member-sheet-range" name="member_range" type="text" maxlength="200" value="MEMBER!A2:Z" required>
         <p id="sheets-settings-state" class="muted" role="status">กำลังโหลดการตั้งค่า…</p>
         <button id="save-sheets-settings" class="primary-button" type="submit" disabled>บันทึกการตั้งค่า</button>
+        <button id="preview-sheets-settings" class="secondary-button" type="button" disabled>ทดสอบอ่านสินค้า/โปรโมชั่น</button>
+        <pre id="sheets-preview-result" class="sheet-preview-result" hidden></pre>
       </form>
       <div class="notice notice-warning">
-        บัญชี Cloud Run ต้องมีสิทธิ์ Firestore และ Google Sheets API พร้อมกับถูกแชร์เข้าถึงไฟล์ชีตนั้น การบันทึกค่าชีตยังไม่เริ่มอ่านชีต ซิงก์ หรือแก้ไขแค็ตตาล็อก
+        ปุ่มทดสอบอ่านจะอ่านเฉพาะสินค้าและโปรโมชั่นจาก Spreadsheet ID เดียวกัน โดยไม่บันทึกหรือเผยแพร่ข้อมูล ส่วน orders และ MEMBER เป็นข้อมูลส่วนบุคคล จึงเก็บชื่อช่วงไว้แต่ยังไม่อ่านหรือเปิดให้ widget สาธารณะค้นหา
+      </div>
+    </section>
+
+    <section class="management-panel widget-sites-panel">
+      <div>
+        <div class="eyebrow">EMBEDDABLE CHAT</div>
+        <h2>จัดการ Chat Widget</h2>
+        <p class="muted">สร้างโปรไฟล์ให้แต่ละเว็บไซต์ แล้วส่งโค้ดติดตั้งให้เจ้าของเว็บ โค้ดจะเชื่อมต่อกับ backend และคลังข้อมูลส่วนกลาง</p>
+      </div>
+      <div id="widget-sites-state" class="notice" role="status">กำลังโหลดเว็บไซต์…</div>
+      <div id="widget-sites-list" class="widget-sites-list"></div>
+      <form id="widget-site-form" class="settings-form widget-site-form">
+        <h3 id="widget-form-title">เพิ่มเว็บไซต์</h3>
+        <label for="widget-site-name">ชื่อเว็บไซต์/แคมเปญ</label>
+        <input id="widget-site-name" name="name" type="text" maxlength="100" required>
+        <label for="widget-site-domains">โดเมนที่อนุญาต (หนึ่งโดเมนต่อบรรทัด ไม่ต้องใส่ https://)</label>
+        <textarea id="widget-site-domains" name="allowed_domains" rows="3" placeholder="example.com&#10;www.example.com" required></textarea>
+        <div class="widget-config-grid">
+          <label for="widget-title">ชื่อหัวแชท</label>
+          <input id="widget-title" name="title" type="text" maxlength="100" value="AI Agent Voice Allday" required>
+          <label for="widget-assistant">ชื่อผู้ช่วย</label>
+          <input id="widget-assistant" name="assistant_name" type="text" maxlength="60" value="AI Assistant" required>
+          <label for="widget-launch">ข้อความปุ่ม</label>
+          <input id="widget-launch" name="launch_text" type="text" maxlength="60" value="ถามเราได้เลย" required>
+          <label for="widget-placeholder">ข้อความในช่องแชท</label>
+          <input id="widget-placeholder" name="placeholder" type="text" maxlength="100" value="พิมพ์ข้อความถึงเจ้าหน้าที่ AI..." required>
+          <label for="widget-color">สีหลัก</label>
+          <input id="widget-color" name="primary_color" type="color" value="#7c3aed" required>
+          <label for="widget-language">ภาษา</label>
+          <select id="widget-language" name="speech_language">
+            <option value="th-TH">ไทย</option>
+            <option value="en-US">English (US)</option>
+          </select>
+        </div>
+        <div class="widget-form-actions">
+          <button id="save-widget-site" class="primary-button" type="submit" disabled>บันทึกเว็บไซต์และสร้างโค้ด</button>
+          <button id="cancel-widget-edit" class="secondary-button" type="button" hidden>ยกเลิกแก้ไข</button>
+        </div>
+      </form>
+      <div class="notice notice-warning">
+        ต้องตั้งค่า Firestore สำหรับบันทึกโปรไฟล์ เว็บไซต์ที่อนุญาตต้องตรงกับโดเมนที่ติดตั้งจริง และไม่ควรใส่ข้อมูลลับในโค้ดที่ส่งให้เจ้าของเว็บ
       </div>
     </section>
 

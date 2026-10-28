@@ -48,7 +48,7 @@ async def preview_product_import(
         "products": preview_records,
         "message": (
             "Product data was validated for the future import flow only. "
-            "Unverified category, price, unit, highlights, and voice-script data "
+            "Unverified category, prices, stock quantity, unit, highlights, and voice-script data "
             "were excluded; no knowledge-base files were changed."
         ),
     }
