@@ -44,60 +44,82 @@ function addToBasket(productId) {
   if (persistBasket()) window.location.assign("/cart");
 }
 
+function createProductCard(product) {
+  const detailUrl = `/products/${encodeURIComponent(product.product_id)}`;
+  const price = getPrice(product);
+  const discount = product.sale_price && product.regular_price > 0 && product.sale_price < product.regular_price
+    ? Math.round((1 - product.sale_price / product.regular_price) * 100)
+    : 0;
+  const card = makeElement("article", "store-product-card");
+
+  const top = makeElement("div", "store-card-top");
+  top.append(
+    makeElement("span", "store-code", `รหัส ${product.product_id}`),
+    makeElement(
+      "span",
+      product.stock_quantity > 0 ? "store-stock" : "store-stock sold-out",
+      product.stock_quantity > 0 ? "พร้อมส่ง" : "สินค้าหมด",
+    ),
+  );
+  card.append(top);
+
+  const media = makeElement("a", "store-product-media");
+  media.href = detailUrl;
+  media.setAttribute("aria-label", `ดูรายละเอียด ${product.name}`);
+  const placeholder = () => {
+    const span = makeElement("span", "store-product-placeholder", "GO");
+    span.setAttribute("aria-hidden", "true");
+    return span;
+  };
+  if (product.image_url) {
+    const image = document.createElement("img");
+    image.src = product.image_url;
+    image.alt = product.name;
+    image.loading = "lazy";
+    image.onerror = () => { image.remove(); media.prepend(placeholder()); };
+    media.append(image);
+  } else {
+    media.append(placeholder());
+  }
+  if (discount > 0) media.append(makeElement("span", "store-discount", `-${discount}%`));
+  card.append(media);
+
+  const name = makeElement("h3");
+  const nameLink = makeElement("a", "", product.name);
+  nameLink.href = detailUrl;
+  name.append(nameLink);
+  card.append(name);
+
+  const priceBox = makeElement("div", "store-price");
+  priceBox.append(makeElement("strong", "store-current-price", formatPrice(price)));
+  if (discount > 0) priceBox.append(makeElement("del", "store-old-price", formatPrice(product.regular_price)));
+  card.append(priceBox);
+
+  const actions = makeElement("div", "store-actions");
+  const detailLink = makeElement("a", "store-detail-button", "รายละเอียด");
+  detailLink.href = detailUrl;
+  const inBasket = basket.get(product.product_id) || 0;
+  const canBuy = product.stock_quantity > inBasket;
+  const buyButton = makeElement(
+    "button",
+    "store-buy-button",
+    product.stock_quantity < 1 ? "สินค้าหมด" : canBuy ? "ใส่ตะกร้า" : "เต็มจำนวนแล้ว",
+  );
+  buyButton.type = "button";
+  buyButton.disabled = !canBuy;
+  buyButton.addEventListener("click", () => addToBasket(product.product_id));
+  actions.append(detailLink, buyButton);
+  card.append(actions);
+  return card;
+}
+
 function renderProducts(products) {
   const activeProducts = products.filter((product) => product.active);
   productById.clear();
   for (const product of activeProducts) productById.set(product.product_id, product);
   productsEmpty.hidden = activeProducts.length > 0;
-  productGrid.replaceChildren(...activeProducts.slice(0, 4).map((product) => {
-    const card = makeElement("article", "product-card");
-    const media = makeElement("div", "home-product-media");
-    if (product.image_url) {
-      const image = document.createElement("img");
-      image.className = "product-image";
-      image.src = product.image_url;
-      image.alt = product.name;
-      image.loading = "lazy";
-      media.append(image);
-    } else {
-      media.append(makeElement("span", "home-product-placeholder", "GO"));
-    }
-    const discount = product.sale_price !== null
-      && product.sale_price !== undefined
-      && product.regular_price > 0
-      && product.sale_price < product.regular_price
-      ? Math.round((1 - product.sale_price / product.regular_price) * 100)
-      : 0;
-    if (discount > 0) media.append(makeElement("span", "home-product-discount", `-${discount}%`));
-    card.append(media);
-    card.append(makeElement("small", "product-id", `รหัส ${product.product_id}`));
-    card.append(makeElement("h3", "", product.name));
-    if (product.description) card.append(makeElement("p", "", product.description));
-    const stockText = product.stock_quantity > 0
-      ? `คงเหลือ ${product.stock_quantity} ชิ้น`
-      : "สินค้าหมดชั่วคราว";
-    card.append(makeElement("small", "product-stock", stockText));
-    const price = makeElement("div", "product-price");
-    price.append(makeElement("strong", "", formatPrice(getPrice(product))));
-    if (product.sale_price !== null && product.sale_price !== undefined) {
-      price.append(makeElement("del", "", formatPrice(product.regular_price)));
-    }
-    card.append(price);
-    const alreadyInBasket = basket.get(product.product_id) || 0;
-    const canAddToBasket = product.stock_quantity > alreadyInBasket;
-    const addButton = makeElement(
-      "button",
-      "add-to-basket",
-      canAddToBasket ? "เพิ่มลงตะกร้า" : "สินค้าเต็มจำนวนในตะกร้า",
-    );
-    addButton.type = "button";
-    addButton.disabled = !canAddToBasket;
-    addButton.addEventListener("click", () => addToBasket(product.product_id));
-    card.append(addButton);
-    return card;
-  }));
+  productGrid.replaceChildren(...activeProducts.slice(0, 8).map(createProductCard));
 }
-
 function renderPromotions(promotions) {
   const activePromotions = promotions.filter((promotion) => promotion.active);
   const cards = activePromotions.map((promotion) => {
