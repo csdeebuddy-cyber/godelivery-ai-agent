@@ -33,6 +33,23 @@ FastAPI chat application with a Gemini Live real-time voice session and browser 
 - In Google Cloud, create the Firestore database and grant the Cloud Run runtime service account the minimum Firestore permissions needed to read/write the `admin_settings` document and `chat_widget_sites` collection. Also grant it access to the Google Sheets API; then set `FIRESTORE_PROJECT_ID` in the Cloud Run service. The sheet settings form will remain unavailable until this is configured and reachable.
 - This initial scaffold does not configure Google Cloud domain mapping, OAuth consent-screen settings, Firestore, or Cloud Run secrets. Complete those deployment settings before enabling admin sign-in.
 
+## Automatic Cloud Run deployment from GitHub
+
+The repository root contains `cloudbuild.yaml`. Configure a Cloud Build trigger for the connected GitHub repository `csdeebuddy-cyber/godelivery-ai-agent` with event **Push to a branch**, branch regex `^main$`, and build configuration file `cloudbuild.yaml` at the repository root. The build uses `my-ai-project/Dockerfile`, pushes a commit-tagged image to Artifact Registry, then deploys that image to the existing Cloud Run service. Each successful push to `main` creates a new revision and sends traffic to it.
+
+Before creating the trigger:
+
+1. Enable Cloud Build, Artifact Registry, and Cloud Run APIs.
+2. Create a Docker Artifact Registry repository in the same region as the Cloud Run service. `_REGION` is used for both the Artifact Registry image host and the Cloud Run deploy region.
+3. Give the trigger's build service account `roles/artifactregistry.writer` on that repository and `roles/run.admin` on the project (or narrower equivalent permissions).
+4. Grant the build service account `roles/iam.serviceAccountUser` on the existing Cloud Run runtime service account so it can deploy using that identity.
+5. Connect the GitHub repository in Cloud Build Repositories/Triggers and create the trigger with substitutions:
+   - `_REGION`: Artifact Registry repository region (for example `asia-southeast1`).
+   - `_AR_REPO`: Artifact Registry Docker repository name.
+   - `_SERVICE`: existing Cloud Run service name.
+
+The deploy step changes the container image only; keep production secrets and environment configuration on the Cloud Run service or in Secret Manager, not in this file. Test the first deployment in Cloud Build History and Cloud Run Revisions. If the build fails, check the trigger's build service-account permissions and the substitution values.
+
 ## Search indexing
 
 The customer and admin pages, as well as API responses, send `noindex` directives using HTML metadata and the `X-Robots-Tag` response header. `robots.txt` allows crawlers to fetch the pages so they can read and honor the `noindex` directive; blocking crawling alone can leave URLs visible in search results. This is not access control—the admin dashboard still requires server-side authentication. After deployment, verify the live URLs in Google Search Console; if a URL was already indexed, request temporary removal there while Google recrawls the `noindex` response.
