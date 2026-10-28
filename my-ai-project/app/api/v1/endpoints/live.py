@@ -14,10 +14,14 @@ from google.genai import types
 from app.config import settings
 from app.services.fasai import (
     ASK_REPEAT_PROMPT,
+    GREETING_PROMPT,
+    HANGUP_PROMPT,
+    HELLO_PROMPT,
+    HOME_URL,
     UNANSWERED_HINT,
     WAIT_NOTICE_PROMPT,
     AgentSession,
-    IdleTimer,
+    SilenceGuard,
     TurnWatchdog,
     build_instructions,
     catalog_prompt,
@@ -137,7 +141,7 @@ async def gemini_live(
     client = genai.Client(api_key=api_key)
     agent = AgentSession()
     watchdog = TurnWatchdog()
-    idle = IdleTimer()
+    silence = SilenceGuard()
     send_lock = asyncio.Lock()
     clock = time.monotonic
     close_reason = "disconnected"
@@ -175,7 +179,13 @@ async def gemini_live(
                     "voice": settings.GEMINI_LIVE_VOICE,
                 }
             )
-            idle.touch(clock())
+            await session.send_realtime_input(text=GREETING_PROMPT)
+
+            def customer_active() -> None:
+                silence.on_customer_activity()
+                if agent.close_reason == "silence_hangup":
+                    agent.pending_redirect = None
+                    agent.close_reason = None
 
             async def send_input() -> None:
                 while True:
@@ -185,7 +195,7 @@ async def gemini_live(
                         text = message.get("text")
                         if isinstance(text, str) and text.strip():
                             await ensure_ticket()
-                            idle.touch(clock())
+                            customer_active()
                             agent.add_transcript("customer", text.strip(), stamp())
                             await session.send_realtime_input(text=text.strip())
                     elif message_type == "audio":
@@ -249,7 +259,7 @@ async def gemini_live(
                             text = content.input_transcription.text
                             await ensure_ticket()
                             now = clock()
-                            idle.touch(now)
+                            customer_active()
                             watchdog.on_user_speech(text, now)
                             agent.add_transcript("customer", text, stamp())
                             await emit({"type": "input_transcription", "text": text})
@@ -260,28 +270,39 @@ async def gemini_live(
                         if content.model_turn:
                             for part in content.model_turn.parts or []:
                                 if part.inline_data and part.inline_data.data:
-                                    idle.touch(clock())
                                     watchdog.on_model_output()
                                     audio_data = part.inline_data.data
                                     if isinstance(audio_data, str):
                                         encoded_audio = audio_data
+                                        raw_length = len(base64.b64decode(audio_data))
                                     else:
                                         encoded_audio = base64.b64encode(audio_data).decode("ascii")
+                                        raw_length = len(audio_data)
+                                    silence.on_agent_audio(clock(), raw_length)
                                     await emit({"type": "audio", "data": encoded_audio})
                         if content.interrupted:
+                            customer_active()
                             await emit({"type": "interrupted"})
                         if content.turn_complete:
                             watchdog.on_turn_complete()
+                            silence.on_agent_turn_complete(clock())
                             await emit({"type": "turn_complete"})
                             if agent.pending_redirect:
-                                raise _EndSession("order_completed" if agent.order_confirmed else "redirect", agent.pending_redirect)
+                                raise _EndSession(agent.close_reason or "redirect", agent.pending_redirect)
 
             async def monitor() -> None:
                 while True:
                     await asyncio.sleep(0.2)
                     now = clock()
-                    if idle.expired(now):
-                        raise _EndSession("idle_timeout", "/")
+                    silent_action = silence.poll(now)
+                    if silent_action == "hello":
+                        await session.send_realtime_input(text=HELLO_PROMPT)
+                        continue
+                    if silent_action == "hangup":
+                        agent.pending_redirect = HOME_URL
+                        agent.close_reason = "silence_hangup"
+                        await session.send_realtime_input(text=HANGUP_PROMPT)
+                        continue
                     action = watchdog.poll(now)
                     if action == "wait_notice":
                         await session.send_realtime_input(text=WAIT_NOTICE_PROMPT)

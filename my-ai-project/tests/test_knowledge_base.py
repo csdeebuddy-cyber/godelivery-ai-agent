@@ -809,7 +809,7 @@ class KnowledgeBaseTests(unittest.TestCase):
         }
         self.assertEqual(
             names,
-            {"add_to_cart", "save_shipping_field", "verify_address", "lookup_postcode", "confirm_order", "log_callback"},
+            {"add_to_cart", "save_shipping_field", "verify_address", "lookup_postcode", "confirm_order", "end_call", "log_callback"},
         )
         self.assertEqual(config.realtime_input_config.automatic_activity_detection.silence_duration_ms, 1800)
         self.assertNotIn("{{", config.system_instruction)

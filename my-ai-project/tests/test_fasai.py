@@ -36,11 +36,42 @@ class WatchdogTests(unittest.TestCase):
         dog.on_turn_complete()
         self.assertEqual(dog.unanswered_text, "hi")
 
-    def test_idle_timer(self) -> None:
-        idle = fasai.IdleTimer(120)
-        idle.touch(0.0)
-        self.assertFalse(idle.expired(119.0))
-        self.assertTrue(idle.expired(120.0))
+    def test_silence_guard_hello_then_hangup(self) -> None:
+        guard = fasai.SilenceGuard()
+        guard.on_agent_audio(0.0, 48000)  # plays until t=1.0
+        self.assertIsNone(guard.poll(0.5))
+        guard.on_agent_turn_complete(0.5)
+        self.assertIsNone(guard.poll(2.9))
+        self.assertEqual(guard.poll(3.0), "hello")
+        guard.on_agent_audio(3.1, 24000)  # hello plays until t=3.6
+        guard.on_agent_turn_complete(3.2)
+        self.assertIsNone(guard.poll(4.5))
+        self.assertEqual(guard.poll(4.7), "hangup")
+        self.assertIsNone(guard.poll(10.0))
+
+    def test_silence_guard_resets_on_customer(self) -> None:
+        guard = fasai.SilenceGuard()
+        guard.on_agent_turn_complete(0.0)
+        self.assertEqual(guard.poll(2.0), "hello")
+        guard.on_customer_activity()
+        guard.on_agent_turn_complete(5.0)
+        self.assertIsNone(guard.poll(6.0))
+        self.assertEqual(guard.poll(7.0), "hello")
+
+    def test_silence_guard_hello_never_completes(self) -> None:
+        guard = fasai.SilenceGuard()
+        guard.on_agent_turn_complete(0.0)
+        self.assertEqual(guard.poll(2.0), "hello")
+        self.assertEqual(guard.poll(8.0), "hangup")
+
+    def test_end_call_and_instructions(self) -> None:
+        session = fasai.AgentSession()
+        _, _ = fasai.run_tool("end_call", {}, session, save_callback=lambda *a, **k: None)
+        self.assertEqual(session.pending_redirect, "/")
+        self.assertEqual(session.close_reason, "customer_ended")
+        text = fasai.build_instructions("{{GREETING}}|{{CLOSING}}")
+        self.assertEqual(text, f"{fasai.GREETING_TEXT}|{fasai.CLOSING_TEXT}")
+        self.assertEqual(fasai.CLOSING_TEXT, "ขอบคุณที่ใช้บริการนะคะ สวัสดีค่ะ")
 
 
 class TicketTests(unittest.TestCase):

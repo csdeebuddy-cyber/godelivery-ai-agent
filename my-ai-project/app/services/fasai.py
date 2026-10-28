@@ -15,7 +15,13 @@ logger = logging.getLogger(__name__)
 
 PERSONA_NAME = "ฟ้าใส"
 LISTEN_DELAY_S = 1.8
-IDLE_TIMEOUT_S = 120.0
+HELLO_AFTER_S = 2.0
+HANGUP_AFTER_S = 1.0
+HELLO_REPLY_TIMEOUT_S = 6.0
+PCM_BYTES_PER_SECOND = 48000  # Gemini Live output: 24 kHz, 16-bit, mono
+GREETING_TEXT = "ออลเดย์ออย สวัสดีคะ ฟ้าใสรับสาย วันนี้มีอะไรให้ดูแลคะ"
+CLOSING_TEXT = "ขอบคุณที่ใช้บริการนะคะ สวัสดีค่ะ"
+HANGUP_TEXT = "ฟ้าใสขออนุญาตวางสายค่ะ"
 HOME_URL = "/"
 FREE_TEXT_FIELDS = ("recipient_name", "house_no", "phone")
 SHIPPING_FIELDS = (
@@ -40,6 +46,15 @@ ASK_REPEAT_PROMPT = (
 UNANSWERED_HINT = (
     "[ระบบ] คำพูดของลูกค้าที่ยังไม่ได้ตอบ: “{text}” "
     "เมื่อลูกค้าพูดครั้งถัดไป ให้ตีความรวมกับข้อความนี้เป็นชุดเดียวกันก่อนตอบ"
+)
+GREETING_PROMPT = (
+    "[ระบบ] มีสายเข้า ให้พูดประโยคต่อไปนี้ตรงตัวทุกคำ ห้ามเพิ่ม ลด หรือเปลี่ยนคำ "
+    f"แล้วหยุดรอลูกค้า: “{GREETING_TEXT}”"
+)
+HELLO_PROMPT = "[ระบบ] ลูกค้าเงียบไป ให้พูดเพียงคำเดียวว่า “ฮัลโหลคะ” แล้วหยุดรอลูกค้า"
+HANGUP_PROMPT = (
+    "[ระบบ] ลูกค้ายังเงียบอยู่ ให้พูดตรงตัวทุกคำว่า "
+    f"“{HANGUP_TEXT} {CLOSING_TEXT}” แล้วหยุดพูด"
 )
 
 
@@ -93,16 +108,60 @@ class TurnWatchdog:
         return None
 
 
-class IdleTimer:
-    def __init__(self, timeout_s: float = IDLE_TIMEOUT_S) -> None:
-        self.timeout_s = timeout_s
-        self._last_activity = 0.0
+class SilenceGuard:
+    """Detects a customer who has stopped answering after Fasai finished speaking.
 
-    def touch(self, now: float) -> None:
-        self._last_activity = now
+    Silence is measured from the estimated end of Fasai's audio playback on the
+    customer's device. After HELLO_AFTER_S we say hello; if the customer is still
+    silent HANGUP_AFTER_S after that, we hang up.
+    """
 
-    def expired(self, now: float) -> bool:
-        return now - self._last_activity >= self.timeout_s
+    def __init__(
+        self,
+        hello_after_s: float = HELLO_AFTER_S,
+        hangup_after_s: float = HANGUP_AFTER_S,
+        hello_reply_timeout_s: float = HELLO_REPLY_TIMEOUT_S,
+    ) -> None:
+        self.hello_after_s = hello_after_s
+        self.hangup_after_s = hangup_after_s
+        self.hello_reply_timeout_s = hello_reply_timeout_s
+        self.stage = 0  # 0 listening, 1 hello sent, 2 hangup sent
+        self._agent_busy = False
+        self._playback_end = 0.0
+        self._quiet_since: float | None = None
+        self._hello_sent_at = 0.0
+
+    def on_agent_audio(self, now: float, pcm_bytes: int) -> None:
+        self._agent_busy = True
+        self._quiet_since = None
+        self._playback_end = max(self._playback_end, now) + pcm_bytes / PCM_BYTES_PER_SECOND
+
+    def on_agent_turn_complete(self, now: float) -> None:
+        self._agent_busy = False
+        self._quiet_since = max(now, self._playback_end)
+
+    def on_customer_activity(self) -> None:
+        self.stage = 0
+        self._quiet_since = None
+
+    def poll(self, now: float) -> str | None:
+        if self.stage >= 2 or self._agent_busy:
+            return None
+        if self._quiet_since is None:
+            if self.stage == 1 and now - self._hello_sent_at >= self.hello_reply_timeout_s:
+                self.stage = 2
+                return "hangup"
+            return None
+        elapsed = now - self._quiet_since
+        if self.stage == 0 and elapsed >= self.hello_after_s:
+            self.stage = 1
+            self._quiet_since = None
+            self._hello_sent_at = now
+            return "hello"
+        if self.stage == 1 and elapsed >= self.hangup_after_s:
+            self.stage = 2
+            return "hangup"
+        return None
 
 
 @dataclass
@@ -111,6 +170,7 @@ class AgentSession:
     cart: dict[str, int] = field(default_factory=dict)
     transcript: list[dict[str, str]] = field(default_factory=list)
     pending_redirect: str | None = None
+    close_reason: str | None = None
     shipping: dict[str, str] = field(default_factory=dict)
     order_confirmed: bool = False
     callback_logged: bool = False
@@ -224,6 +284,13 @@ def tool_config() -> list[types.Tool]:
                     ),
                 ),
                 types.FunctionDeclaration(
+                    name="end_call",
+                    description=(
+                        "ใช้เมื่อลูกค้าบอกว่าไม่ต้องการอะไรเพิ่มหรือขอวางสาย "
+                        "เรียกก่อนพูดประโยคปิดท้าย ระบบจะตัดสายหลังพูดจบ"
+                    ),
+                ),
+                types.FunctionDeclaration(
                     name="confirm_order",
                     description="ยืนยันคำสั่งซื้อหลังลูกค้ายืนยันว่าที่อยู่ถูกต้อง ระบบจะตัดสายหลังพูดจบ",
                 ),
@@ -312,9 +379,21 @@ def run_tool(
             return {"ok": False, "error": "ข้อมูลจัดส่งยังไม่ครบ", "missing": missing}, None
         session.order_confirmed = True
         session.pending_redirect = HOME_URL
-        return {"ok": True, "message": "บันทึกคำสั่งซื้อแล้ว ให้ขอบคุณลูกค้าและกล่าวลา ระบบจะตัดสายเอง"}, {
-            "type": "order_confirmed"
-        }
+        session.close_reason = "order_completed"
+        return {
+            "ok": True,
+            "message": (
+                "บันทึกคำสั่งซื้อแล้ว ให้แจ้งว่ารอรับสินค้าภายใน 3 วัน แล้วพูดประโยคปิดท้ายตรงตัวเป็นประโยคสุดท้าย: "
+                f"{CLOSING_TEXT} ระบบจะตัดสายเอง"
+            ),
+        }, {"type": "order_confirmed"}
+    if name == "end_call":
+        session.pending_redirect = HOME_URL
+        session.close_reason = session.close_reason or "customer_ended"
+        return {
+            "ok": True,
+            "message": f"ให้พูดประโยคปิดท้ายตรงตัวเป็นประโยคสุดท้าย: {CLOSING_TEXT} ระบบจะตัดสายเอง",
+        }, None
     if name == "log_callback":
         reason = str(args.get("reason", "")).strip()
         if not reason or session.ticket_no is None:
@@ -364,4 +443,8 @@ def normalize_shipping_value(field_name: str, raw: str) -> tuple[str, str | None
 
 
 def build_instructions(base: str) -> str:
-    return base.replace("{{TRIAL_PRICE}}", str(trial_price()))
+    return (
+        base.replace("{{TRIAL_PRICE}}", str(trial_price()))
+        .replace("{{GREETING}}", GREETING_TEXT)
+        .replace("{{CLOSING}}", CLOSING_TEXT)
+    )
