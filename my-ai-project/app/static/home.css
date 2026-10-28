@@ -100,9 +100,9 @@ a { color: inherit; text-decoration: none; }
 .catalog-empty { margin: 0; padding: 15px; border-radius: 12px; color: var(--muted); background: #f8f6f9; font-size: 13px; }
 .product-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .product-card { display: flex; flex-direction: column; min-width: 0; padding: 17px; border: 1px solid var(--line); border-radius: 15px; background: #fff; }
-.home-product-media { position: relative; display: grid; width: 100%; aspect-ratio: 4 / 3; margin-bottom: 12px; place-items: center; overflow: hidden; border-radius: 10px; background: linear-gradient(145deg, #fbf9fc, #f3eff5); }
-.product-image { width: 100%; height: 100%; object-fit: contain; mix-blend-mode: multiply; }
-.home-product-placeholder { color: #d7cada; font: 700 34px "Kanit", sans-serif; }
+.home-product-media { position: relative; display: block; width: 100%; margin-bottom: 12px; overflow: hidden; border-radius: 10px; background: #f6f3f7; }
+.product-image { display: block; width: 100%; height: auto; }
+.home-product-placeholder { display: grid; min-height: 120px; place-items: center; color: #d7cada; font: 700 34px "Kanit", sans-serif; }
 .home-product-discount { position: absolute; top: 0; right: 0; padding: 5px 10px 6px; border-radius: 0 0 0 15px; color: #fff; background: linear-gradient(110deg, #ff293b, #ec008c 70%, #7758ff); font: 700 11px "Kanit", sans-serif; }
 .product-card h3 { margin: 0 0 5px; font: 700 16px "Kanit", "Sarabun", sans-serif; overflow-wrap: anywhere; }
 .product-card p { margin: 0 0 12px; color: var(--muted); font-size: 12px; line-height: 1.6; white-space: pre-line; }
