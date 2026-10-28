@@ -1,8 +1,8 @@
 const productGrid = document.querySelector("#product-grid");
 const productsEmpty = document.querySelector("#products-empty");
 const promotionList = document.querySelector("#promotion-list");
-const faqList = document.querySelector("#faq-list");
-const faqsEmpty = document.querySelector("#faqs-empty");
+
+
 const basketCount = document.querySelector("#basket-count");
 const productById = new Map();
 let basket = new Map();
@@ -113,17 +113,6 @@ function renderPromotions(promotions) {
   promotionList.replaceChildren(...cards);
 }
 
-function renderFAQs(faqs) {
-  const activeFAQs = faqs.filter((faq) => faq.active !== false);
-  faqsEmpty.hidden = activeFAQs.length > 0;
-  faqList.replaceChildren(...activeFAQs.map((faq) => {
-    const item = document.createElement("details");
-    item.append(makeElement("summary", "", faq.question));
-    item.append(makeElement("p", "", faq.answer));
-    return item;
-  }));
-}
-
 function updateBasketCount() {
   basketCount.textContent = String(Array.from(basket.values()).reduce((total, quantity) => total + quantity, 0));
 }
@@ -136,7 +125,7 @@ function renderSiteContent(content) {
     title.textContent = section.title || "";
     body.textContent = section.body || "";
   }
-  renderFAQs(content.faqs || []);
+
   renderProducts(content.products || []);
   renderPromotions(content.promotions || []);
   updateBasketCount();

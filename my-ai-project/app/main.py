@@ -49,6 +49,16 @@ async def cart_page() -> FileResponse:
     return FileResponse(STATIC_DIR / "cart.html")
 
 
+@app.get("/faq", include_in_schema=False)
+async def faq_page() -> FileResponse:
+    return FileResponse(STATIC_DIR / "faq.html")
+
+
+@app.get("/fag", include_in_schema=False)
+async def faq_page_alias() -> RedirectResponse:
+    return RedirectResponse("/faq", status_code=301)
+
+
 @app.get("/products/{product_id:path}", include_in_schema=False)
 async def product_detail(product_id: str) -> FileResponse:
     return FileResponse(STATIC_DIR / "product-detail.html")
