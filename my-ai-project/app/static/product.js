@@ -64,14 +64,38 @@ function buyProduct(product) {
     catalogError.textContent = "บันทึกตะกร้าสินค้าไม่ได้ กรุณาอนุญาตการจัดเก็บข้อมูลในเบราว์เซอร์";
     return;
   }
-  window.location.assign("/#basket");
+  updateBasketCount();
+  renderProducts();
+}
+
+function createPlaceholder() {
+  const placeholder = document.createElement("span");
+  placeholder.className = "store-product-placeholder";
+  placeholder.textContent = "GO";
+  placeholder.setAttribute("aria-hidden", "true");
+  return placeholder;
 }
 
 function createProductCard(product, basket) {
+  const detailUrl = `/products/${encodeURIComponent(product.product_id)}`;
   const card = document.createElement("article");
   card.className = "store-product-card";
-  const media = document.createElement("div");
+
+  const top = document.createElement("div");
+  top.className = "store-card-top";
+  const code = document.createElement("span");
+  code.className = "store-code";
+  code.textContent = `รหัส ${product.product_id}`;
+  const stock = document.createElement("span");
+  stock.className = product.stock_quantity > 0 ? "store-stock" : "store-stock sold-out";
+  stock.textContent = product.stock_quantity > 0 ? "พร้อมส่ง" : "สินค้าหมด";
+  top.append(code, stock);
+  card.append(top);
+
+  const media = document.createElement("a");
   media.className = "store-product-media";
+  media.href = detailUrl;
+  media.setAttribute("aria-label", `ดูรายละเอียด ${product.name}`);
   if (product.image_url) {
     const image = document.createElement("img");
     image.src = product.image_url;
@@ -79,19 +103,11 @@ function createProductCard(product, basket) {
     image.loading = "lazy";
     image.onerror = () => {
       image.remove();
-      const placeholder = document.createElement("span");
-      placeholder.className = "store-product-placeholder";
-      placeholder.textContent = "GO";
-      placeholder.setAttribute("aria-hidden", "true");
-      media.prepend(placeholder);
+      media.prepend(createPlaceholder());
     };
     media.append(image);
   } else {
-    const placeholder = document.createElement("span");
-    placeholder.className = "store-product-placeholder";
-    placeholder.textContent = "GO";
-    placeholder.setAttribute("aria-hidden", "true");
-    media.append(placeholder);
+    media.append(createPlaceholder());
   }
   const discount = discountFor(product);
   if (discount > 0) {
@@ -102,43 +118,33 @@ function createProductCard(product, basket) {
   }
   card.append(media);
 
-  const info = document.createElement("div");
-  info.className = "store-product-info";
-  const productId = document.createElement("small");
-  productId.className = "store-product-id";
-  productId.textContent = `รหัสสินค้า ${product.product_id}`;
-  info.append(productId);
   const name = document.createElement("h3");
-  name.textContent = product.name;
-  info.append(name);
-  const description = document.createElement("p");
-  description.className = "store-product-description";
-  description.textContent = product.description || "สินค้าแนะนำจาก GoDelivery";
-  info.append(description);
-
-  const stock = document.createElement("small");
-  stock.className = product.stock_quantity > 0 ? "store-stock" : "store-stock sold-out";
-  stock.textContent = product.stock_quantity > 0
-    ? `พร้อมส่ง · เหลือ ${product.stock_quantity} ชิ้น`
-    : "สินค้าหมดชั่วคราว";
-  info.append(stock);
+  const nameLink = document.createElement("a");
+  nameLink.href = detailUrl;
+  nameLink.textContent = product.name;
+  name.append(nameLink);
+  card.append(name);
 
   const price = document.createElement("div");
   price.className = "store-price";
-  const oldPrice = document.createElement("small");
-  oldPrice.className = "store-old-price";
-  if (discount > 0) {
-    const crossedPrice = document.createElement("del");
-    crossedPrice.textContent = formatPrice(product.regular_price);
-    oldPrice.append(crossedPrice);
-  }
-  price.append(oldPrice);
   const currentPrice = document.createElement("strong");
   currentPrice.className = "store-current-price";
-  currentPrice.textContent = `เริ่มต้น ${formatPrice(priceFor(product))}`;
+  currentPrice.textContent = formatPrice(priceFor(product));
   price.append(currentPrice);
-  info.append(price);
+  if (discount > 0) {
+    const crossedPrice = document.createElement("del");
+    crossedPrice.className = "store-old-price";
+    crossedPrice.textContent = formatPrice(product.regular_price);
+    price.append(crossedPrice);
+  }
+  card.append(price);
 
+  const actions = document.createElement("div");
+  actions.className = "store-actions";
+  const detailLink = document.createElement("a");
+  detailLink.className = "store-detail-button";
+  detailLink.href = detailUrl;
+  detailLink.textContent = "รายละเอียด";
   const buyButton = document.createElement("button");
   buyButton.type = "button";
   buyButton.className = "store-buy-button";
@@ -147,12 +153,12 @@ function createProductCard(product, basket) {
   buyButton.textContent = product.stock_quantity < 1
     ? "สินค้าหมด"
     : canBuy
-      ? "ซื้อเลย"
-      : "สินค้าเต็มจำนวนในตะกร้า";
+      ? "ใส่ตะกร้า"
+      : "เต็มจำนวนแล้ว";
   buyButton.disabled = !canBuy;
   buyButton.addEventListener("click", () => buyProduct(product));
-  info.append(buyButton);
-  card.append(info);
+  actions.append(detailLink, buyButton);
+  card.append(actions);
   return card;
 }
 

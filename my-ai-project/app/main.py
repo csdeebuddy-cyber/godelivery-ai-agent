@@ -44,6 +44,11 @@ async def product_catalog() -> FileResponse:
     return FileResponse(STATIC_DIR / "product.html")
 
 
+@app.get("/products/{product_id:path}", include_in_schema=False)
+async def product_detail(product_id: str) -> FileResponse:
+    return FileResponse(STATIC_DIR / "product-detail.html")
+
+
 @app.get("/chatandshop", include_in_schema=False)
 async def chat_and_shop() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
