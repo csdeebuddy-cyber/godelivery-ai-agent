@@ -166,6 +166,7 @@
       accountButton.hidden = true;
       signupButton.hidden = ssoButton.hidden = false;
       if (me.error === "account_locked") message(MESSAGES.account_locked);
+      else if (new URLSearchParams(location.search).get("login") === "1") startSso();
       return;
     }
     csrfToken = me.csrf_token;
