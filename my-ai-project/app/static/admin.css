@@ -138,3 +138,51 @@ footer { margin-top: auto; padding: 20px 0; color: #9691a4; text-align: center; 
   .dashboard-heading { padding-top: 28px; }
   .login-card { padding: 29px 21px; }
 }
+
+/* Seller-center style console (scoped to the admin dashboard) */
+body.admin-console { background: #f4f5f7; --accent: #0a9d78; }
+.admin-console .console-topbar { position: sticky; top: 0; z-index: 30; height: 56px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: #0f1115; color: #fff; }
+.admin-console .console-brand { display: inline-flex; align-items: center; gap: 9px; color: #fff; text-decoration: none; font-size: 14px; }
+.admin-console .console-logo { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: #ec008c; font-weight: 700; }
+.admin-console .console-divider { opacity: .4; }
+.admin-console .console-actions { display: flex; align-items: center; gap: 10px; }
+.admin-console .console-pill { padding: 7px 14px; border-radius: 999px; background: #ec008c; color: #fff; text-decoration: none; font-size: 12px; font-weight: 700; }
+.admin-console .console-email { padding: 6px 12px; border: 1px solid #333844; border-radius: 8px; font-size: 12px; color: #cfd3dc; }
+.admin-console .console-logout { padding: 7px 14px; border: 0; border-radius: 8px; background: #e4004f; color: #fff; font-size: 12px; font-weight: 700; }
+.admin-console .admin-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: calc(100vh - 56px); }
+.admin-console .admin-sidebar { position: sticky; top: 56px; align-self: start; height: calc(100vh - 56px); padding: 12px 10px; background: #fff; border-right: 1px solid #e6e8ec; overflow-y: auto; }
+.admin-console .admin-sidebar nav { display: grid; gap: 2px; }
+.admin-console .admin-sidebar a { padding: 10px 12px; border-radius: 9px; color: #333; text-decoration: none; font-size: 13px; font-weight: 600; }
+.admin-console .admin-sidebar a:hover { background: #f3f4f6; }
+.admin-console .admin-sidebar a.active { background: #e8f7f2; color: var(--accent); }
+.admin-console .admin-sidebar hr { width: 100%; border: 0; border-top: 1px solid #e6e8ec; margin: 8px 0; }
+.admin-console .admin-shell { width: auto; max-width: none; margin: 0; padding: 0 24px 24px; }
+.admin-console .console-hero { margin: 0 -24px; padding: 34px 24px 70px; display: flex; justify-content: space-between; align-items: center; gap: 16px; background: #0f1115; color: #fff; }
+.admin-console .console-hero h1 { margin: 0; font-size: 14px; letter-spacing: 0; }
+.admin-console .console-live { font-size: 11px; color: #5ee0b5; }
+.admin-console .kpi-strip { margin-top: -44px; display: grid; grid-template-columns: repeat(5, 1fr); background: #fff; border-radius: 14px; box-shadow: 0 6px 22px #0f111522; }
+.admin-console .kpi-strip article { padding: 16px 18px; border-left: 1px solid #eceef1; display: grid; gap: 4px; }
+.admin-console .kpi-strip article:first-child { border-left: 0; }
+.admin-console .kpi-strip span { font-size: 12px; font-weight: 700; color: #333; }
+.admin-console .kpi-strip strong { font-size: 26px; line-height: 1.1; }
+.admin-console .kpi-strip small { font-size: 11px; color: #9aa0aa; }
+.admin-console .dashboard-heading { padding: 28px 0 14px; }
+.admin-console .dashboard-heading h1 { font-size: 20px; margin: 0 0 4px; }
+.admin-console .status-card, .admin-console .management-panel { border: 1px solid #e6e8ec; border-radius: 14px; background: #fff; box-shadow: 0 2px 10px #0f11150a; }
+.admin-console .management-panel { scroll-margin-top: 72px; }
+.admin-console .eyebrow { color: var(--accent); }
+.admin-console .primary-button { background: var(--accent); border-color: var(--accent); color: #fff; }
+.admin-console .secondary-button:hover { border-color: var(--accent); background: #f3fbf8; }
+@media (max-width: 900px) {
+  .admin-console .admin-layout { grid-template-columns: 1fr; }
+  .admin-console .admin-sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid #e6e8ec; }
+  .admin-console .admin-sidebar nav { grid-auto-flow: column; overflow-x: auto; }
+  .admin-console .admin-sidebar a { white-space: nowrap; }
+  .admin-console .admin-sidebar hr { display: none; }
+  .admin-console .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+  .admin-console .kpi-strip article:nth-child(odd) { border-left: 0; }
+  .admin-console .console-email { display: none; }
+}
+.admin-console .status-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.admin-console .status-card { min-height: 0; }
+@media (max-width: 900px) { .admin-console .status-grid { grid-template-columns: repeat(2, 1fr); } }

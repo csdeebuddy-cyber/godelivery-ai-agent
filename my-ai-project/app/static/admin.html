@@ -9,28 +9,54 @@
   <title>Admin Dashboard · AI Voice Allday</title>
   <link rel="stylesheet" href="/static/admin.css">
 </head>
-<body>
-  <main class="admin-shell">
-    <header class="admin-topbar">
-      <a class="brand" href="/dashboard/admin">
-        <span class="brand-mark" aria-hidden="true">✦</span>
-        <span>AI Voice <strong>Allday</strong></span>
-      </a>
-      <div class="topbar-actions">
-        <a class="secondary-button" href="/dashboard/admin">← กลับหน้าแรกแอดมิน</a>
-        <span id="admin-email" class="admin-identity">กำลังโหลดบัญชี…</span>
-        <form action="/admin/auth/logout" method="post">
-          <button class="secondary-button" type="submit">ออกจากระบบ</button>
-        </form>
-      </div>
-    </header>
+<body class="admin-console">
+  <header class="console-topbar">
+    <a class="console-brand" href="/dashboard/admin">
+      <span class="console-logo" aria-hidden="true">7</span>
+      <strong>711SHOPPING</strong><span class="console-divider">|</span><span>Admin Center</span>
+    </a>
+    <div class="console-actions">
+      <a class="console-pill" href="/" target="_blank" rel="noopener">เปิดหน้าร้าน ↗</a>
+      <span id="admin-email" class="console-email">กำลังโหลดบัญชี…</span>
+      <form action="/admin/auth/logout" method="post">
+        <button class="console-logout" type="submit">ออกจากระบบ</button>
+      </form>
+    </div>
+  </header>
 
-    <section class="dashboard-heading">
-      <div class="eyebrow">ADMIN CONSOLE</div>
-      <h1>จัดการระบบ AI Voice</h1>
-      <p class="muted">ตรวจสอบความพร้อมของระบบและคลังข้อมูล</p>
+  <div class="admin-layout">
+    <aside class="admin-sidebar" aria-label="เมนูแอดมิน">
+      <nav>
+        <a href="#overview" class="active">หน้าแรก</a>
+        <a href="#website-content">เนื้อหาและสินค้า</a>
+        <a href="#data-management">การจัดการข้อมูล</a>
+        <a href="#google-sheets">Google Sheets</a>
+        <a href="#chat-widget">Chat Widget</a>
+        <a href="#secrets">Gemini API Key</a>
+        <hr>
+        <a href="/chatandshop">Chat &amp; Shop (AI)</a>
+        <a href="/docs">API docs</a>
+      </nav>
+    </aside>
+
+  <main class="admin-shell">
+    <section class="console-hero" id="overview">
+      <h1>ยินดีต้อนรับสู่ศูนย์ผู้ดูแลร้าน 711SHOPPING</h1>
+      <span class="console-live">● ระบบเชื่อมต่อสด</span>
     </section>
 
+    <section class="kpi-strip" aria-label="ภาพรวมร้านค้า">
+      <article><span>สินค้าที่เผยแพร่</span><strong id="kpi-active-products">—</strong><small>รายการ active บนหน้าร้าน</small></article>
+      <article><span>สินค้าหมด</span><strong id="kpi-sold-out">—</strong><small>สต็อกเป็น 0</small></article>
+      <article><span>สต็อกเหลือน้อย</span><strong id="kpi-low-stock">—</strong><small>เหลือไม่เกิน 5 ชิ้น</small></article>
+      <article><span>โปรโมชัน</span><strong id="kpi-promotions">—</strong><small>รายการที่เผยแพร่</small></article>
+      <article><span>คำถามที่พบบ่อย</span><strong id="kpi-faqs">—</strong><small>รายการที่เผยแพร่</small></article>
+    </section>
+
+    <section class="dashboard-heading">
+      <h1>ตรวจสอบสถานะระบบ</h1>
+      <p class="muted">ความพร้อมของคลังข้อมูลและบริการที่เชื่อมต่อ</p>
+    </section>
     <div id="dashboard-error" class="notice notice-error" role="alert" hidden></div>
 
     <section class="status-grid" aria-label="สถานะระบบ">
@@ -60,7 +86,7 @@
       </article>
     </section>
 
-    <section class="management-panel">
+    <section class="management-panel" id="data-management">
       <div>
         <div class="eyebrow">DATA MANAGEMENT</div>
         <h2>การจัดการข้อมูล</h2>
@@ -75,7 +101,7 @@
       </div>
     </section>
 
-    <section class="management-panel content-editor-panel">
+    <section class="management-panel content-editor-panel" id="website-content">
       <div>
         <div class="eyebrow">WEBSITE CONTENT</div>
         <h2>จัดการเมนูและเนื้อหาหน้าแรก</h2>
@@ -147,7 +173,7 @@
       </form>
     </section>
 
-    <section class="management-panel settings-panel">
+    <section class="management-panel settings-panel" id="google-sheets">
       <div>
         <div class="eyebrow">GOOGLE SHEETS</div>
         <h2>ตั้งค่า Knowledge จาก Google Sheets</h2>
@@ -202,7 +228,7 @@
       </div>
     </section>
 
-    <section class="management-panel widget-sites-panel">
+    <section class="management-panel widget-sites-panel" id="chat-widget">
       <div>
         <div class="eyebrow">EMBEDDABLE CHAT</div>
         <h2>จัดการ Chat Widget</h2>
@@ -243,7 +269,7 @@
       </div>
     </section>
 
-    <section class="management-panel secret-panel">
+    <section class="management-panel secret-panel" id="secrets">
       <div>
         <div class="eyebrow">SECRET MANAGER</div>
         <h2>ตั้งค่า Gemini API Key</h2>
@@ -258,12 +284,10 @@
       <div class="notice notice-warning">ห้ามใส่ key ใน Firestore, GitHub, ช่องแชต หรือไฟล์ frontend</div>
     </section>
 
-    <section class="quick-links">
-      <a href="/chatandshop">เปิดหน้า AI Voice Agent →</a>
-      <a href="/docs">ดู API docs →</a>
-    </section>
     <footer>ผู้ดูแลที่อนุญาต: smpmfast@gmail.com</footer>
   </main>
+  </div>
   <script src="/static/admin.js" defer></script>
+  <script src="/static/admin-overview.js" defer></script>
 </body>
 </html>
