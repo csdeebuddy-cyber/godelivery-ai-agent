@@ -188,12 +188,17 @@ function handleLiveMessage(message) {
   } else if (message.type === "shipping_field") {
     const label = SHIPPING_LABELS[message.field] || message.field;
     appendMessage("assistant", `บันทึก${label}: ${message.value}`);
+  } else if (message.type === "address_candidates") {
+    const areas = (message.areas || [])
+      .map((area) => `จังหวัด${area.province} อำเภอ/เขต${area.district} ตำบล/แขวง: ${area.subdistricts.join(", ")}`)
+      .join("\n");
+    appendMessage("assistant", `รหัสไปรษณีย์ ${message.postcode}\n${areas}`);
   } else if (message.type === "cart_add") {
     addToStoredBasket(message.product_id, message.quantity);
   } else if (message.type === "redirect") {
     setStatus("กำลังกลับหน้าหลัก...");
     const remainingMs = audioContext ? Math.max(0, playbackTime - audioContext.currentTime) * 1000 : 0;
-    window.setTimeout(() => window.location.assign(message.url || "/"), remainingMs + 800);
+    window.setTimeout(() => window.location.assign(message.url || "/"), remainingMs + 1000);
   } else if (message.type === "error") {
     appendMessage("assistant", message.message || "Gemini Live เกิดข้อผิดพลาด", { error: true });
   }

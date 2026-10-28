@@ -219,8 +219,14 @@ async def gemini_live(
                         save_callback=request_callback,
                     )
                     if event:
-                        await emit(event)
-                    if agent.ticket_no and call.name in {"save_shipping_field", "add_to_cart", "confirm_order"}:
+                        for item in event if isinstance(event, list) else [event]:
+                            await emit(item)
+                    if agent.ticket_no and call.name in {
+                        "save_shipping_field",
+                        "verify_address",
+                        "add_to_cart",
+                        "confirm_order",
+                    }:
                         fields = {"shipping": agent.shipping, "cart": agent.cart_lines(published_products())}
                         if agent.order_confirmed:
                             fields["status"] = "order_placed"

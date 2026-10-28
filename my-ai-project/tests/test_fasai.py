@@ -101,16 +101,21 @@ class ToolTests(unittest.TestCase):
         values = {
             "recipient_name": "Somchai Jaidee",
             "house_no": "12/3",
-            "subdistrict": "Bangna",
-            "district": "Bangna",
-            "province": "Bangkok",
-            "postcode": "10260",
             "phone": "0812345678",
         }
         for key, value in values.items():
             (saved, _), _ = self.run_tool("save_shipping_field", {"field": key, "value": value}, session)
             self.assertTrue(saved["ok"])
-        self.assertTrue(saved["complete"])
+        (blocked, _), _ = self.run_tool("save_shipping_field", {"field": "postcode", "value": "10260"}, session)
+        self.assertFalse(blocked["ok"])
+        (verified, events), _ = self.run_tool(
+            "verify_address",
+            {"subdistrict": "บางนาเหนือ", "district": "บางนา", "province": "กรุงเทพ", "postcode": "10260"},
+            session,
+        )
+        self.assertTrue(verified["verified"])
+        self.assertTrue(verified["complete"])
+        self.assertEqual(len(events), 4)
         (done, _), _ = self.run_tool("confirm_order", {}, session)
         self.assertTrue(done["ok"])
         self.assertTrue(session.order_confirmed)

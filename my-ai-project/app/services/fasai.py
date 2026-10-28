@@ -8,6 +8,7 @@ from typing import Any
 from google.genai import types
 
 from app.config import settings
+from app.services import address_book
 from app.services.site_content import get_site_content
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,7 @@ PERSONA_NAME = "ฟ้าใส"
 LISTEN_DELAY_S = 1.8
 IDLE_TIMEOUT_S = 120.0
 HOME_URL = "/"
+FREE_TEXT_FIELDS = ("recipient_name", "house_no", "phone")
 SHIPPING_FIELDS = (
     "recipient_name",
     "house_no",
@@ -187,12 +189,38 @@ def tool_config() -> list[types.Tool]:
                         properties={
                             "field": schema(
                                 type=kind.STRING,
-                                enum=list(SHIPPING_FIELDS),
+                                enum=list(FREE_TEXT_FIELDS),
                                 description="ชื่อช่อง",
                             ),
                             "value": schema(type=kind.STRING, description="ค่าที่ลูกค้าพูด"),
                         },
                         required=["field", "value"],
+                    ),
+                ),
+                types.FunctionDeclaration(
+                    name="verify_address",
+                    description=(
+                        "ตรวจตำบล อำเภอ จังหวัด รหัสไปรษณีย์ที่ลูกค้าพูดกับฐานข้อมูลที่อยู่ "
+                        "ถ้าตรงจะบันทึกให้ทันที ถ้าไม่ตรงจะคืนรายการตัวเลือกตามรหัสไปรษณีย์"
+                    ),
+                    parameters=schema(
+                        type=kind.OBJECT,
+                        properties={
+                            "subdistrict": schema(type=kind.STRING, description="ตำบล/แขวง"),
+                            "district": schema(type=kind.STRING, description="อำเภอ/เขต"),
+                            "province": schema(type=kind.STRING, description="จังหวัด"),
+                            "postcode": schema(type=kind.STRING, description="รหัสไปรษณีย์ 5 หลัก"),
+                        },
+                        required=["subdistrict", "district", "province", "postcode"],
+                    ),
+                ),
+                types.FunctionDeclaration(
+                    name="lookup_postcode",
+                    description="ค้นจังหวัด อำเภอ ตำบล จากรหัสไปรษณีย์ ใช้เมื่อ verify_address ไม่ตรง",
+                    parameters=schema(
+                        type=kind.OBJECT,
+                        properties={"postcode": schema(type=kind.STRING, description="รหัสไปรษณีย์ 5 หลัก")},
+                        required=["postcode"],
                     ),
                 ),
                 types.FunctionDeclaration(
@@ -246,15 +274,34 @@ def run_tool(
             {"ok": True, "cart": lines, "total": sum(line["line_total"] for line in lines)},
             {"type": "cart_add", "product_id": product_id, "quantity": quantity},
         )
+    if name == "verify_address":
+        result = address_book.verify_address(
+            str(args.get("subdistrict", "")),
+            str(args.get("district", "")),
+            str(args.get("province", "")),
+            str(args.get("postcode", "")),
+        )
+        if result["match"]:
+            address = result["address"]
+            session.shipping.update(address)
+            events = [{"type": "shipping_field", "field": key, "value": value} for key, value in address.items()]
+            return {"ok": True, "verified": True, "address": address, **_progress(session)}, events
+        return {"ok": False, "verified": False, **{k: v for k, v in result.items() if k != "match"}}, (
+            {"type": "address_candidates", **result} if result.get("found") else None
+        )
+    if name == "lookup_postcode":
+        result = address_book.lookup_postcode(str(args.get("postcode", "")))
+        return result, ({"type": "address_candidates", **result} if result.get("found") else None)
     if name == "save_shipping_field":
         field_name = str(args.get("field", "")).strip()
+        if field_name not in FREE_TEXT_FIELDS:
+            return {"ok": False, "error": "ช่องที่อยู่ต้องบันทึกผ่าน verify_address เท่านั้น"}, None
         value, error = normalize_shipping_value(field_name, str(args.get("value", "")))
         if error:
             return {"ok": False, "error": error}, None
         session.shipping[field_name] = value
-        missing = [name_ for name_ in SHIPPING_FIELDS if name_ not in session.shipping]
         return (
-            {"ok": True, "saved": {field_name: value}, "missing": missing, "complete": not missing},
+            {"ok": True, "saved": {field_name: value}, **_progress(session)},
             {"type": "shipping_field", "field": field_name, "value": value},
         )
     if name == "confirm_order":
@@ -288,6 +335,11 @@ def live_input_config() -> types.RealtimeInputConfig:
 
 def trial_price() -> int:
     return settings.FASAI_TRIAL_PRICE_THB
+
+
+def _progress(session: AgentSession) -> dict[str, Any]:
+    missing = [name_ for name_ in SHIPPING_FIELDS if name_ not in session.shipping]
+    return {"missing": missing, "complete": not missing}
 
 
 def normalize_shipping_value(field_name: str, raw: str) -> tuple[str, str | None]:
