@@ -118,14 +118,13 @@ function updateBasketCount() {
 }
 
 function renderSiteContent(content) {
-  for (const sectionName of ["company", "terms", "security", "shipping", "returns"]) {
+  for (const sectionName of ["company"]) {
     const section = content[sectionName] || {};
     const title = document.querySelector(`#${sectionName}-title`);
     const body = document.querySelector(`#${sectionName}-body`);
-    title.textContent = section.title || "";
-    body.textContent = section.body || "";
+    if (title) title.textContent = section.title || "";
+    if (body) body.textContent = section.body || "";
   }
-
   renderProducts(content.products || []);
   renderPromotions(content.promotions || []);
   updateBasketCount();
