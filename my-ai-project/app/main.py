@@ -69,6 +69,14 @@ async def chat_and_shop() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
 
 
+@app.get("/user-profile", include_in_schema=False)
+async def user_profile(request: Request) -> Response:
+    session = read_member_session(request)
+    if session is None or session.get("stage") != "active":
+        return RedirectResponse("/", status_code=303)
+    return FileResponse(STATIC_DIR / "user.html", headers={"Cache-Control": "no-store"})
+
+
 @app.get("/user/{customer_no}", include_in_schema=False)
 async def member_home(customer_no: str, request: Request) -> Response:
     session = read_member_session(request)

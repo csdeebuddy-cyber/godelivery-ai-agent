@@ -62,7 +62,8 @@
   (async () => {
     const me = await request("/me", { method: "GET" }).catch(() => null);
     const expected = location.pathname.split("/").filter(Boolean).pop();
-    if (!me || !me.authenticated || me.stage !== "active" || me.customer_no !== expected) {
+    const byNumber = location.pathname.startsWith("/user/");
+    if (!me || !me.authenticated || me.stage !== "active" || (byNumber && me.customer_no !== expected)) {
       location.replace("/");
       return;
     }
