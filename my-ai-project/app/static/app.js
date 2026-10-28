@@ -20,6 +20,15 @@ let playbackTime = 0;
 let playbackNodes = [];
 let assistantTranscript = null;
 const ticketInfo = document.querySelector("#ticket-info");
+const SHIPPING_LABELS = {
+  recipient_name: "ชื่อผู้รับ",
+  house_no: "บ้านเลขที่",
+  subdistrict: "ตำบล",
+  district: "อำเภอ",
+  province: "จังหวัด",
+  postcode: "รหัสไปรษณีย์",
+  phone: "เบอร์โทร",
+};
 
 function addToStoredBasket(productId, quantity) {
   let basket = [];
@@ -176,12 +185,15 @@ function handleLiveMessage(message) {
       ticketInfo.textContent = `หมายเลขตั๋ว ${message.ticket_no} · เปิดสนทนา ${opened}`;
       ticketInfo.hidden = false;
     }
+  } else if (message.type === "shipping_field") {
+    const label = SHIPPING_LABELS[message.field] || message.field;
+    appendMessage("assistant", `บันทึก${label}: ${message.value}`);
   } else if (message.type === "cart_add") {
     addToStoredBasket(message.product_id, message.quantity);
   } else if (message.type === "redirect") {
-    stopPlayback();
-    setStatus("กำลังพาไปยังหน้าถัดไป...");
-    window.setTimeout(() => window.location.assign(message.url || "/"), 800);
+    setStatus("กำลังกลับหน้าหลัก...");
+    const remainingMs = audioContext ? Math.max(0, playbackTime - audioContext.currentTime) * 1000 : 0;
+    window.setTimeout(() => window.location.assign(message.url || "/"), remainingMs + 800);
   } else if (message.type === "error") {
     appendMessage("assistant", message.message || "Gemini Live เกิดข้อผิดพลาด", { error: true });
   }

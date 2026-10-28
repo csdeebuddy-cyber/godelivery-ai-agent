@@ -27,7 +27,7 @@ from app.services.fasai import (
     tool_config,
 )
 from app.services.knowledge_base import get_knowledge_base_context
-from app.services.tickets import close_ticket, create_ticket, request_callback
+from app.services.tickets import close_ticket, create_ticket, request_callback, update_ticket
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -93,6 +93,7 @@ def _live_config(language: Literal["th-TH", "en-US"]) -> types.LiveConnectConfig
             ),
         ),
         realtime_input_config=live_input_config(),
+        enable_affective_dialog=True if settings.FASAI_AFFECTIVE_DIALOG else None,
         tools=tool_config(),
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
@@ -219,6 +220,11 @@ async def gemini_live(
                     )
                     if event:
                         await emit(event)
+                    if agent.ticket_no and call.name in {"save_shipping_field", "add_to_cart", "confirm_order"}:
+                        fields = {"shipping": agent.shipping, "cart": agent.cart_lines(published_products())}
+                        if agent.order_confirmed:
+                            fields["status"] = "order_placed"
+                        await asyncio.to_thread(update_ticket, agent.ticket_no, fields)
                     responses.append(
                         types.FunctionResponse(id=call.id, name=call.name, response=result)
                     )
@@ -262,7 +268,7 @@ async def gemini_live(
                             watchdog.on_turn_complete()
                             await emit({"type": "turn_complete"})
                             if agent.pending_redirect:
-                                raise _EndSession("checkout", agent.pending_redirect)
+                                raise _EndSession("order_completed" if agent.order_confirmed else "redirect", agent.pending_redirect)
 
             async def monitor() -> None:
                 while True:

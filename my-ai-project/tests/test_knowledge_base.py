@@ -807,7 +807,7 @@ class KnowledgeBaseTests(unittest.TestCase):
             for tool in config.tools
             for declaration in tool.function_declarations
         }
-        self.assertEqual(names, {"add_to_cart", "go_checkout", "log_callback"})
+        self.assertEqual(names, {"add_to_cart", "save_shipping_field", "confirm_order", "log_callback"})
         self.assertEqual(config.realtime_input_config.automatic_activity_detection.silence_duration_ms, 1800)
         self.assertNotIn("{{", config.system_instruction)
         self.assertIn("Current local knowledge-base data", config.system_instruction)

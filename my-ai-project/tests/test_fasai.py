@@ -80,14 +80,41 @@ class ToolTests(unittest.TestCase):
         self.assertFalse(unknown["ok"])
         self.assertEqual(session.cart, {})
 
-    def test_checkout_requires_cart(self) -> None:
+    def test_shipping_validation(self) -> None:
         session = AgentSession()
-        (empty, _), _ = self.run_tool("go_checkout", {}, session)
+        (bad, _), _ = self.run_tool("save_shipping_field", {"field": "postcode", "value": "123"}, session)
+        (bad_phone, _), _ = self.run_tool("save_shipping_field", {"field": "phone", "value": "12345"}, session)
+        (ok, event), _ = self.run_tool("save_shipping_field", {"field": "phone", "value": "081-234 5678"}, session)
+        self.assertFalse(bad["ok"])
+        self.assertFalse(bad_phone["ok"])
+        self.assertEqual(session.shipping["phone"], "0812345678")
+        self.assertEqual(event["type"], "shipping_field")
+        self.assertFalse(ok["complete"])
+
+    def test_confirm_order_needs_cart_and_complete_shipping(self) -> None:
+        session = AgentSession()
+        (empty, _), _ = self.run_tool("confirm_order", {}, session)
         self.assertFalse(empty["ok"])
         session.cart["p1"] = 1
-        (ok, _), _ = self.run_tool("go_checkout", {}, session)
-        self.assertTrue(ok["ok"])
-        self.assertEqual(session.pending_redirect, fasai.CHECKOUT_URL)
+        (partial, _), _ = self.run_tool("confirm_order", {}, session)
+        self.assertFalse(partial["ok"])
+        values = {
+            "recipient_name": "Somchai Jaidee",
+            "house_no": "12/3",
+            "subdistrict": "Bangna",
+            "district": "Bangna",
+            "province": "Bangkok",
+            "postcode": "10260",
+            "phone": "0812345678",
+        }
+        for key, value in values.items():
+            (saved, _), _ = self.run_tool("save_shipping_field", {"field": key, "value": value}, session)
+            self.assertTrue(saved["ok"])
+        self.assertTrue(saved["complete"])
+        (done, _), _ = self.run_tool("confirm_order", {}, session)
+        self.assertTrue(done["ok"])
+        self.assertTrue(session.order_confirmed)
+        self.assertEqual(session.pending_redirect, fasai.HOME_URL)
 
     def test_log_callback_needs_ticket(self) -> None:
         session = AgentSession()

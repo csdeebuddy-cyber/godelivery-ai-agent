@@ -1,6 +1,7 @@
 """Fasai (ฟ้าใส) agent logic: turn timing, session state, and tool handling."""
 
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -14,7 +15,16 @@ logger = logging.getLogger(__name__)
 PERSONA_NAME = "ฟ้าใส"
 LISTEN_DELAY_S = 1.8
 IDLE_TIMEOUT_S = 120.0
-CHECKOUT_URL = "/cart"
+HOME_URL = "/"
+SHIPPING_FIELDS = (
+    "recipient_name",
+    "house_no",
+    "subdistrict",
+    "district",
+    "province",
+    "postcode",
+    "phone",
+)
 MAX_LINE_QUANTITY = 10
 
 WAIT_NOTICE_PROMPT = (
@@ -99,6 +109,8 @@ class AgentSession:
     cart: dict[str, int] = field(default_factory=dict)
     transcript: list[dict[str, str]] = field(default_factory=list)
     pending_redirect: str | None = None
+    shipping: dict[str, str] = field(default_factory=dict)
+    order_confirmed: bool = False
     callback_logged: bool = False
 
     def add_transcript(self, role: str, text: str, at: str) -> None:
@@ -168,8 +180,24 @@ def tool_config() -> list[types.Tool]:
                     ),
                 ),
                 types.FunctionDeclaration(
-                    name="go_checkout",
-                    description="พาลูกค้าไปหน้าชำระเงิน เรียกหลังทวนรายการสินค้าและแจ้งลูกค้าแล้วเท่านั้น",
+                    name="save_shipping_field",
+                    description="บันทึกข้อมูลจัดส่งหนึ่งช่องที่ลูกค้าพูด เรียกทันทีเมื่อได้คำตอบแต่ละช่อง",
+                    parameters=schema(
+                        type=kind.OBJECT,
+                        properties={
+                            "field": schema(
+                                type=kind.STRING,
+                                enum=list(SHIPPING_FIELDS),
+                                description="ชื่อช่อง",
+                            ),
+                            "value": schema(type=kind.STRING, description="ค่าที่ลูกค้าพูด"),
+                        },
+                        required=["field", "value"],
+                    ),
+                ),
+                types.FunctionDeclaration(
+                    name="confirm_order",
+                    description="ยืนยันคำสั่งซื้อหลังลูกค้ายืนยันว่าที่อยู่ถูกต้อง ระบบจะตัดสายหลังพูดจบ",
                 ),
                 types.FunctionDeclaration(
                     name="log_callback",
@@ -218,11 +246,28 @@ def run_tool(
             {"ok": True, "cart": lines, "total": sum(line["line_total"] for line in lines)},
             {"type": "cart_add", "product_id": product_id, "quantity": quantity},
         )
-    if name == "go_checkout":
+    if name == "save_shipping_field":
+        field_name = str(args.get("field", "")).strip()
+        value, error = normalize_shipping_value(field_name, str(args.get("value", "")))
+        if error:
+            return {"ok": False, "error": error}, None
+        session.shipping[field_name] = value
+        missing = [name_ for name_ in SHIPPING_FIELDS if name_ not in session.shipping]
+        return (
+            {"ok": True, "saved": {field_name: value}, "missing": missing, "complete": not missing},
+            {"type": "shipping_field", "field": field_name, "value": value},
+        )
+    if name == "confirm_order":
+        missing = [name_ for name_ in SHIPPING_FIELDS if name_ not in session.shipping]
         if not session.cart:
             return {"ok": False, "error": "ตะกร้ายังว่างอยู่"}, None
-        session.pending_redirect = CHECKOUT_URL
-        return {"ok": True, "message": "ระบบจะพาลูกค้าไปหน้าชำระเงินหลังพูดจบ"}, None
+        if missing:
+            return {"ok": False, "error": "ข้อมูลจัดส่งยังไม่ครบ", "missing": missing}, None
+        session.order_confirmed = True
+        session.pending_redirect = HOME_URL
+        return {"ok": True, "message": "บันทึกคำสั่งซื้อแล้ว ให้ขอบคุณลูกค้าและกล่าวลา ระบบจะตัดสายเอง"}, {
+            "type": "order_confirmed"
+        }
     if name == "log_callback":
         reason = str(args.get("reason", "")).strip()
         if not reason or session.ticket_no is None:
@@ -245,17 +290,26 @@ def trial_price() -> int:
     return settings.FASAI_TRIAL_PRICE_THB
 
 
-CHECKOUT_VOICE_SECTION = """## การขอข้อมูลจัดส่ง (หน้าชำระเงิน)
-
-ก่อนขอข้อมูลทุกครั้งต้องแจ้งว่า "สายนี้มีการบันทึกบทสนทนา เพื่อพัฒนาการให้บริการของฟ้าใสด้วยนะคะ" จากนั้นถามทีละข้อ:
-1. ชื่อผู้รับ  2. ที่อยู่ บ้านเลขที่  3. ตำบล/อำเภอ/จังหวัด  4. รหัสไปรษณีย์  5. เบอร์โทร
-เมื่อครบ แจ้งยอดเก็บเงินปลายทางและว่ารอรับสินค้า 1-3 วัน ขนส่งแฟลช แล้วแจ้งให้ลูกค้าตรวจรายการสั่งซื้อและกดใส่รหัสผ่าน 6 ตัวบนหน้าจอ (ห้ามให้พูดรหัสออกเสียง)"""
-
-CHECKOUT_PAGE_SECTION = """## หลังพาลูกค้าไปหน้าชำระเงิน
-
-ระบบยังไม่รองรับการรับที่อยู่ทางเสียง ให้แจ้งลูกค้าว่ากรอกชื่อ ที่อยู่ รหัสไปรษณีย์ และเบอร์โทรเองบนหน้าจอได้เลย ชำระเงินปลายทาง ห้ามขอที่อยู่หรือเบอร์โทรทางเสียง"""
+def normalize_shipping_value(field_name: str, raw: str) -> tuple[str, str | None]:
+    if field_name not in SHIPPING_FIELDS:
+        return "", "ไม่รู้จักช่องนี้"
+    value = " ".join(raw.split())
+    if field_name == "postcode":
+        digits = re.sub(r"\D", "", value)
+        if not re.fullmatch(r"\d{5}", digits):
+            return "", "รหัสไปรษณีย์ต้องเป็นตัวเลข 5 หลัก"
+        return digits, None
+    if field_name == "phone":
+        digits = re.sub(r"\D", "", value)
+        if not re.fullmatch(r"0\d{9}", digits):
+            return "", "เบอร์โทรต้องเป็นตัวเลข 10 หลักขึ้นต้นด้วย 0"
+        return digits, None
+    if len(value) < 2:
+        return "", "ข้อมูลสั้นเกินไป"
+    if len(value) > 200:
+        return "", "ข้อมูลยาวเกินไป"
+    return value, None
 
 
 def build_instructions(base: str) -> str:
-    section = CHECKOUT_VOICE_SECTION if settings.FASAI_CHECKOUT_VOICE_ENABLED else CHECKOUT_PAGE_SECTION
-    return base.replace("{{TRIAL_PRICE}}", str(trial_price())).replace("{{CHECKOUT_SECTION}}", section)
+    return base.replace("{{TRIAL_PRICE}}", str(trial_price()))
