@@ -1,3 +1,4 @@
+import logging
 import re
 import secrets
 from datetime import datetime
@@ -16,6 +17,7 @@ from app.services.firebase.storage import get_catalog_image
 from app.services.site_content import get_site_content
 
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/site", tags=["public-site"])
 LOCAL_TIMEZONE = ZoneInfo("Asia/Bangkok")
 CATALOG_ASSET_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
@@ -94,6 +96,7 @@ def public_site_content(response: Response) -> dict[str, Any]:
     try:
         content = get_site_content()
     except (RuntimeError, GoogleAPIError, GoogleAuthError) as exc:
+        logger.error("Published site content unavailable: %s: %s", type(exc).__name__, exc)
         raise HTTPException(
             status_code=503,
             detail="Published website content is not available.",
