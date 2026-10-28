@@ -1,4 +1,3 @@
-const homeState = document.querySelector("#home-state");
 const productGrid = document.querySelector("#product-grid");
 const productsEmpty = document.querySelector("#products-empty");
 const promotionList = document.querySelector("#promotion-list");
@@ -207,15 +206,8 @@ async function loadSiteContent() {
     if (!response.ok) throw new Error("โหลดเนื้อหาล่าสุดไม่สำเร็จ กรุณาลองใหม่ภายหลัง");
     const content = await response.json();
     renderSiteContent(content);
-    if (privacyPolicyConfigured) {
-      homeState.hidden = true;
-    } else {
-      showState(homeState, "ยังไม่สามารถส่งคำสั่งซื้อหรือสมัครสมาชิกได้ เนื่องจากผู้ดูแลระบบยังไม่ได้เผยแพร่ Privacy Policy", true);
-      homeState.hidden = false;
-    }
   } catch (error) {
-    showState(homeState, error.message, true);
-    homeState.hidden = false;
+    console.error("Could not load published homepage content.", error);
   }
 }
 
