@@ -206,7 +206,9 @@ async def member_google_callback(
             )
             token_response.raise_for_status()
             encoded = token_response.json().get("id_token")
-        claims = id_token.verify_oauth2_token(encoded, GoogleAuthRequest(), config["client_id"])
+        claims = await run_in_threadpool(
+            id_token.verify_oauth2_token, encoded, GoogleAuthRequest(), config["client_id"]
+        )
     except (httpx.HTTPError, ValueError, google_auth_exceptions.GoogleAuthError):
         return fail("sign_in_failed")
 
