@@ -1,9 +1,11 @@
-from fastapi import FastAPI
-from fastapi.responses import FileResponse, PlainTextResponse
+import re
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 from app.api.admin import router as admin_router
+from app.api.v1.endpoints.member import read_session as read_member_session
 from app.api.v1.router import api_router
 from app.config import settings
 
@@ -45,6 +47,19 @@ async def product_catalog() -> FileResponse:
 @app.get("/chatandshop", include_in_schema=False)
 async def chat_and_shop() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/user/{customer_no}", include_in_schema=False)
+async def member_home(customer_no: str, request: Request) -> Response:
+    session = read_member_session(request)
+    if (
+        not re.fullmatch(r"[1-9]\d{4}", customer_no)
+        or session is None
+        or session.get("stage") != "active"
+        or session.get("cn") != customer_no
+    ):
+        return RedirectResponse("/", status_code=303)
+    return FileResponse(STATIC_DIR / "user.html", headers={"Cache-Control": "no-store"})
 
 
 if __name__ == "__main__":

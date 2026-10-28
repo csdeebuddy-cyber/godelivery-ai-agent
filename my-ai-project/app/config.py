@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     ADMIN_GOOGLE_CLIENT_SECRET: str | None = None
     ADMIN_OAUTH_REDIRECT_URI: str | None = None
     ADMIN_SESSION_SECRET: str | None = None
+    # Member SSO falls back to the admin Google OAuth client and session secret.
+    MEMBER_GOOGLE_CLIENT_ID: str | None = None
+    MEMBER_GOOGLE_CLIENT_SECRET: str | None = None
+    MEMBER_OAUTH_REDIRECT_URI: str | None = None
+    MEMBER_SESSION_SECRET: str | None = None
     FIRESTORE_PROJECT_ID: str = "gen-lang-client-0845508747"
     FIREBASE_STORAGE_BUCKET: str | None = None
     HOST: str = "0.0.0.0"

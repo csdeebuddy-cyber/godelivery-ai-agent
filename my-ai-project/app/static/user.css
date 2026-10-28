@@ -1,0 +1,6 @@
+.user-page { padding: 32px 0 60px; }
+.user-card { max-width: 520px; margin: 0 auto; padding: 28px; border: 1px solid var(--line); border-radius: 20px; background: #fff; box-shadow: 0 10px 28px #34213809; color: #2b2233; }
+.user-card h1 { margin: 4px 0 6px; font: 700 26px "Kanit", sans-serif; }
+.user-card .member-btn { border-color: #e8e3f2; color: #2b2233; }
+.user-card .member-btn-primary { background: #ec008c; border-color: #ec008c; color: #fff; }
+.user-card [hidden] { display: none; }

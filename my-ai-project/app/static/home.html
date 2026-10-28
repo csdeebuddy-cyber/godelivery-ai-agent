@@ -9,6 +9,7 @@
   <meta name="description" content="GoDelivery - พาร์ทเนอร์ธุรกิจ โปรโมชัน และบริการ AI ผู้ช่วยลูกค้า">
   <title>GoDelivery | 711shopping</title>
   <link rel="stylesheet" href="/static/home.css">
+  <link rel="stylesheet" href="/static/member.css">
 </head>
 <body>
   <div class="utility-bar">
@@ -43,6 +44,11 @@
         <a href="/#basket">ตะกร้า <span id="basket-count" class="basket-count">0</span></a>
       </nav>
 
+      <div class="member-actions" id="member-actions">
+        <button type="button" class="member-btn" id="member-signup" data-sso>สมัครสมาชิก</button>
+        <button type="button" class="member-btn member-btn-primary" id="member-sso" data-sso>สมัครด้วย SSO</button>
+        <button type="button" class="member-btn" id="member-account" hidden></button>
+      </div>
       <a class="header-chat" href="/chatandshop">คุยกับ AI <span aria-hidden="true">↗</span></a>
       <details class="mobile-nav">
         <summary aria-label="เปิดเมนู"><span></span><span></span><span></span></summary>
@@ -181,22 +187,6 @@
       </div>
     </section>
 
-    <section class="container member-panel" id="membership">
-      <div>
-        <span class="section-kicker">OPTIONAL MEMBERSHIP</span>
-        <h2>สมัครสมาชิก</h2>
-        <p>สมัครได้โดยไม่ต้องสั่งซื้อ ระบบจัดเก็บข้อมูลเท่าที่จำเป็นและต้องได้รับความยินยอมก่อนบันทึก</p>
-      </div>
-      <form id="member-form" class="customer-form">
-        <label>ชื่อ<input name="customer" maxlength="160" autocomplete="name" required></label>
-        <label>เบอร์โทรศัพท์<input name="phone_number" type="tel" maxlength="24" autocomplete="tel" required></label>
-        <label>อีเมล (ถ้ามี)<input name="email" type="email" maxlength="254" autocomplete="email"></label>
-        <label class="consent-label"><input name="privacy_consent" type="checkbox" required> ยินยอมให้บันทึกข้อมูลสมาชิกตาม <a href="#security">Privacy Policy</a></label>
-        <p id="member-state" class="form-state" role="status"></p>
-        <button class="primary-button" type="submit" disabled>สมัครสมาชิก</button>
-      </form>
-    </section>
-
     <section class="container policy-grid" aria-label="ข้อมูลและนโยบาย">
       <article id="terms" class="policy-card"><h2 id="terms-title">เงื่อนไขการใช้งาน</h2><p id="terms-body">รายละเอียดการใช้งานจะแสดงที่นี่</p></article>
       <article id="security" class="policy-card"><h2 id="security-title">ความปลอดภัย / Privacy Policy</h2><p id="security-body">รายละเอียดการคุ้มครองข้อมูลส่วนบุคคลจะแสดงที่นี่</p></article>
@@ -247,6 +237,10 @@
     </div>
     <div class="container footer-bottom"><span>© 2026 GoDelivery. All rights reserved.</span><a href="/chatandshop">AI Voice Allday</a></div>
   </footer>
+  <dialog id="member-dialog" class="member-dialog" aria-labelledby="member-dialog-title">
+    <div class="member-dialog-body" id="member-dialog-body"></div>
+  </dialog>
   <script src="/static/home.js" defer></script>
+  <script src="/static/member.js" defer></script>
 </body>
 </html>

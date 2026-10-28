@@ -8,8 +8,6 @@ const basketEmpty = document.querySelector("#basket-empty");
 const orderArea = document.querySelector("#order-area");
 const orderForm = document.querySelector("#order-form");
 const orderState = document.querySelector("#order-state");
-const memberForm = document.querySelector("#member-form");
-const memberState = document.querySelector("#member-state");
 const basketCount = document.querySelector("#basket-count");
 const productById = new Map();
 let basket = new Map();
@@ -214,7 +212,7 @@ function renderSiteContent(content) {
   renderProducts(content.products || []);
   renderPromotions(content.promotions || []);
   privacyPolicyConfigured = Boolean(content.security?.body?.trim());
-  for (const form of [orderForm, memberForm]) {
+  for (const form of [orderForm]) {
     form.querySelector('input[name="privacy_consent"]').disabled = !privacyPolicyConfigured;
     form.querySelector('button[type="submit"]').disabled = !privacyPolicyConfigured;
   }
@@ -277,36 +275,6 @@ orderForm.addEventListener("submit", async (event) => {
     showState(orderState, error.message, true);
   } finally {
     submitButton.disabled = basket.size === 0;
-  }
-});
-
-memberForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const submitButton = memberForm.querySelector('button[type="submit"]');
-  submitButton.disabled = true;
-  showState(memberState, "กำลังบันทึกข้อมูลสมาชิก…");
-  const formData = new FormData(memberForm);
-  const email = String(formData.get("email") || "").trim();
-  const payload = {
-    customer: String(formData.get("customer") || "").trim(),
-    phone_number: String(formData.get("phone_number") || "").trim(),
-    email: email || null,
-    privacy_consent: formData.get("privacy_consent") === "on",
-  };
-  try {
-    const response = await fetch("/api/v1/site/members", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.detail || "สมัครสมาชิกไม่สำเร็จ");
-    memberForm.reset();
-    showState(memberState, `บันทึกข้อมูลสมาชิกแล้ว เลขสมาชิก ${result.membernumber}`);
-  } catch (error) {
-    showState(memberState, error.message, true);
-  } finally {
-    submitButton.disabled = false;
   }
 });
 

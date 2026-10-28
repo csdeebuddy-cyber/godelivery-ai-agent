@@ -6,11 +6,14 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from google.api_core.exceptions import GoogleAPIError
 from google.auth.exceptions import GoogleAuthError
+from starlette.concurrency import run_in_threadpool
 
 from app.schemas.site_content import CustomerOrderRequest, MemberRegistrationRequest
+from app.services.members import service as member_service
+from app.services.members.sheet_export import export_member
 from app.services.admin_settings import get_google_sheets_settings
 from app.services.google_sheets_customer_data import append_customer_row
 from app.services.firebase.storage import get_catalog_image
@@ -87,6 +90,31 @@ def _timestamp() -> str:
     return datetime.now(LOCAL_TIMEZONE).isoformat(timespec="seconds")
 
 
+async def _save_member_profile_from_order(request: Request, order: CustomerOrderRequest) -> None:
+    """Signed-in members get their delivery details stored as their profile (best effort)."""
+    from app.api.v1.endpoints.member import read_session
+
+    session = read_session(request)
+    if session is None or session.get("stage") != "active":
+        return
+    try:
+        member = await run_in_threadpool(
+            member_service.update_profile,
+            session["cn"],
+            session["did"],
+            {
+                "name": order.customer,
+                "address": order.address,
+                "address1": order.address1,
+                "postcode": order.postcode,
+                "phone": order.phone_number,
+            },
+        )
+        await export_member(member, "order_profile_update")
+    except Exception:
+        logger.exception("Could not save member profile from order.")
+
+
 def _record_number(prefix: str, now: datetime) -> str:
     return f"{prefix}{now:%Y%m%d}{secrets.randbelow(1_000_000):06d}"
 
@@ -118,7 +146,7 @@ def public_site_content(response: Response) -> dict[str, Any]:
 
 
 @router.post("/orders", status_code=201)
-async def submit_customer_order(order: CustomerOrderRequest) -> dict[str, str]:
+async def submit_customer_order(order: CustomerOrderRequest, request: Request) -> dict[str, str]:
     if not order.privacy_consent:
         raise HTTPException(
             status_code=422,
@@ -198,6 +226,7 @@ async def submit_customer_order(order: CustomerOrderRequest) -> dict[str, str]:
         )
     except (GoogleAPIError, GoogleAuthError, RuntimeError, httpx.HTTPError, ValueError) as exc:
         raise _append_error(exc) from exc
+    await _save_member_profile_from_order(request, order)
     return {
         "status": "saved",
         "ordernumber": order_number,

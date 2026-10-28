@@ -1,0 +1,25 @@
+.member-actions { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+.member-btn { min-height: 38px; padding: 8px 14px; border: 1px solid #ffffff99; border-radius: 999px; background: transparent; color: inherit; font: 700 13px "Sarabun", sans-serif; cursor: pointer; white-space: nowrap; }
+.member-btn-primary { background: #fff; color: #ec008c; border-color: #fff; }
+.member-btn:hover { transform: translateY(-1px); }
+.member-actions + .header-chat { margin-left: 0; }
+.member-dialog { width: min(420px, calc(100vw - 32px)); padding: 0; border: 0; border-radius: 18px; box-shadow: 0 24px 60px #2a123b55; color: #2b2233; }
+.member-dialog::backdrop { background: #1d0f2b80; }
+.member-dialog-body { padding: 24px; }
+.member-form { display: grid; gap: 12px; }
+.member-form h3 { margin: 0; font: 700 20px "Kanit", sans-serif; }
+.member-form label { display: grid; gap: 5px; font-size: 12px; font-weight: 700; }
+.member-form input { width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid #e8e3f2; border-radius: 9px; font: inherit; box-sizing: border-box; }
+.member-form input:disabled { background: #f6f3fa; color: #6b6275; }
+.member-dialog .member-btn { border-color: #e8e3f2; color: #2b2233; }
+.member-dialog .member-btn-primary { background: #ec008c; border-color: #ec008c; color: #fff; }
+.member-note { margin: 0; color: #6b6275; font-size: 13px; line-height: 1.6; }
+.member-state { min-height: 18px; margin: 0; font-size: 12px; color: #2b2233; }
+.member-state-error { color: #c0152f; }
+.member-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.member-hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+@media (max-width: 720px) {
+  .member-actions { gap: 6px; }
+  .member-btn { padding: 7px 10px; font-size: 12px; }
+  #member-signup { display: none; }
+}
