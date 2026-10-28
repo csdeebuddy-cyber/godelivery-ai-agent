@@ -48,8 +48,12 @@ function persistBasket() {
 }
 
 function addToBasket(productId) {
-  basket.set(productId, (basket.get(productId) || 0) + 1);
+  const product = productById.get(productId);
+  const quantity = basket.get(productId) || 0;
+  if (!product || quantity >= product.stock_quantity) return;
+  basket.set(productId, quantity + 1);
   persistBasket();
+  renderProducts(Array.from(productById.values()));
   renderBasket();
   document.querySelector("#basket").scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -59,16 +63,27 @@ function renderProducts(products) {
   productById.clear();
   for (const product of activeProducts) productById.set(product.product_id, product);
   productsEmpty.hidden = activeProducts.length > 0;
-  productGrid.replaceChildren(...activeProducts.map((product) => {
+  productGrid.replaceChildren(...activeProducts.slice(0, 4).map((product) => {
     const card = makeElement("article", "product-card");
+    const media = makeElement("div", "home-product-media");
     if (product.image_url) {
       const image = document.createElement("img");
       image.className = "product-image";
       image.src = product.image_url;
       image.alt = product.name;
       image.loading = "lazy";
-      card.append(image);
+      media.append(image);
+    } else {
+      media.append(makeElement("span", "home-product-placeholder", "GO"));
     }
+    const discount = product.sale_price !== null
+      && product.sale_price !== undefined
+      && product.regular_price > 0
+      && product.sale_price < product.regular_price
+      ? Math.round((1 - product.sale_price / product.regular_price) * 100)
+      : 0;
+    if (discount > 0) media.append(makeElement("span", "home-product-discount", `-${discount}%`));
+    card.append(media);
     card.append(makeElement("small", "product-id", `รหัส ${product.product_id}`));
     card.append(makeElement("h3", "", product.name));
     if (product.description) card.append(makeElement("p", "", product.description));
@@ -82,9 +97,15 @@ function renderProducts(products) {
       price.append(makeElement("del", "", formatPrice(product.regular_price)));
     }
     card.append(price);
-    const addButton = makeElement("button", "add-to-basket", "เพิ่มลงตะกร้า");
+    const alreadyInBasket = basket.get(product.product_id) || 0;
+    const canAddToBasket = product.stock_quantity > alreadyInBasket;
+    const addButton = makeElement(
+      "button",
+      "add-to-basket",
+      canAddToBasket ? "เพิ่มลงตะกร้า" : "สินค้าเต็มจำนวนในตะกร้า",
+    );
     addButton.type = "button";
-    addButton.disabled = product.stock_quantity < 1;
+    addButton.disabled = !canAddToBasket;
     addButton.addEventListener("click", () => addToBasket(product.product_id));
     card.append(addButton);
     return card;

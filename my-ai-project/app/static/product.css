@@ -1,0 +1,79 @@
+.catalog-page { padding-bottom: 22px; }
+.catalog-breadcrumb { display: flex; gap: 9px; padding-block: 18px; color: var(--muted); font-size: 12px; }
+.catalog-breadcrumb a { color: var(--pink-dark); }
+.catalog-hero { position: relative; display: flex; justify-content: space-between; min-height: 230px; padding: 34px clamp(24px, 5vw, 58px); overflow: hidden; border-radius: 24px; color: #fff; background: linear-gradient(110deg, #bc0068, #ec008c 58%, #fc671a); }
+.catalog-hero > div:first-child { position: relative; z-index: 1; }
+.catalog-hero h1 { margin: 11px 0 7px; font: 800 clamp(28px, 4vw, 42px)/1.2 "Kanit", "Sarabun", sans-serif; }
+.catalog-hero h1 span { color: #fff0a5; }
+.catalog-hero p { margin: 0 0 17px; color: #ffedf5; font-size: 13px; }
+.catalog-hero .section-kicker { color: #ffe98f; }
+.catalog-cart-link { display: inline-flex; gap: 5px; align-items: center; padding: 9px 13px; border: 1px solid #ffffff80; border-radius: 10px; font-size: 12px; font-weight: 700; }
+.catalog-cart-link span { display: inline-grid; min-width: 20px; height: 20px; place-items: center; padding-inline: 5px; border-radius: 99px; color: var(--pink-dark); background: #fff; }
+.catalog-hero-art { position: absolute; top: 0; right: 4%; width: 280px; height: 100%; display: grid; place-items: center; }
+.hero-art-bag { display: grid; width: 116px; height: 130px; place-items: center; border: 1px solid #ffffffaa; border-radius: 23px 23px 34px 34px; color: #bd0068; background: linear-gradient(145deg, #fff, #ffd8e9); box-shadow: 0 22px 38px #74003b45; font: 800 35px "Kanit", sans-serif; transform: rotate(7deg); }
+.hero-art-spark { position: absolute; color: #fff3a1; font-size: 36px; }
+.spark-one { top: 35px; left: 28px; }
+.spark-two { right: 20px; bottom: 28px; font-size: 52px; }
+.catalog-section { margin-top: 28px; padding: 26px; border: 1px solid var(--line); border-radius: 22px; background: #faf9fb; }
+.catalog-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
+.catalog-heading h2 { margin: 4px 0; font: 700 25px "Kanit", "Sarabun", sans-serif; }
+.catalog-heading p { margin: 0; color: var(--muted); font-size: 12px; }
+.catalog-search { display: grid; gap: 5px; width: min(330px, 100%); color: #514a58; font-size: 11px; font-weight: 700; }
+.catalog-search input, .catalog-toolbar select { min-height: 42px; padding: 8px 12px; border: 1px solid #e8e3ec; border-radius: 10px; background: #fff; color: var(--ink); font: inherit; }
+.catalog-search input:focus, .catalog-toolbar select:focus { outline: 2px solid #efb4d2; border-color: #efb4d2; }
+.catalog-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 20px 0 14px; padding-top: 16px; border-top: 1px solid #eeeaf0; }
+.catalog-toolbar p { margin: 0; color: var(--muted); font-size: 12px; }
+.catalog-toolbar label { display: flex; align-items: center; gap: 8px; color: #514a58; font-size: 12px; }
+.catalog-toolbar select { min-height: 36px; padding-block: 5px; }
+.store-product-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.store-product-card { position: relative; display: flex; flex-direction: column; min-width: 0; padding: 12px; overflow: hidden; border: 1px solid #f0edf1; border-radius: 22px; background: #fff; box-shadow: 0 8px 22px #3221330d; transition: transform .18s ease, box-shadow .18s ease; }
+.store-product-card:hover { transform: translateY(-3px); box-shadow: 0 14px 28px #32213316; }
+.store-product-media { position: relative; display: grid; height: 190px; place-items: center; overflow: hidden; border-radius: 15px; background: linear-gradient(145deg, #fbf9fc, #f3eff5); }
+.store-product-media img { width: 100%; height: 100%; object-fit: contain; mix-blend-mode: multiply; }
+.store-product-placeholder { color: #d7cada; font: 700 48px "Kanit", sans-serif; }
+.store-discount { position: absolute; top: 0; right: 0; padding: 7px 13px 8px; border-radius: 0 0 0 19px; color: #fff; background: linear-gradient(110deg, #ff293b, #ec008c 70%, #7758ff); font: 700 13px "Kanit", sans-serif; }
+.store-product-info { display: flex; flex: 1; flex-direction: column; padding: 11px 3px 2px; }
+.store-product-id { color: #9c939f; font-size: 10px; }
+.store-product-info h3 { min-height: 44px; margin: 3px 0 5px; font: 600 16px/1.4 "Kanit", "Sarabun", sans-serif; overflow-wrap: anywhere; }
+.store-product-description { min-height: 37px; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.store-stock { margin-top: 9px; color: #8d8591; font-size: 10px; }
+.store-stock.sold-out { color: #ad4354; }
+.store-price { display: grid; gap: 1px; margin-top: auto; padding-top: 9px; }
+.store-old-price { min-height: 15px; color: #aaa4ad; font-size: 11px; }
+.store-old-price del { color: inherit; }
+.store-current-price { color: #ed101b; font: 700 20px "Kanit", "Sarabun", sans-serif; }
+.store-buy-button { min-height: 40px; margin-top: 13px; border: 1px solid #ff303d; border-radius: 999px; color: #ec101c; background: #fff; font: 600 13px "Sarabun", sans-serif; cursor: pointer; transition: color .18s ease, background .18s ease; }
+.store-buy-button:hover:not(:disabled) { color: #fff; background: #ed101b; }
+.store-buy-button:disabled { border-color: #d5d0d7; color: #9c969f; background: #f4f2f5; cursor: not-allowed; }
+.catalog-error { margin: 14px 0 0; color: #9a3444; font-size: 13px; }
+.catalog-empty { grid-column: 1 / -1; }
+.catalog-page + .site-footer { margin-top: 12px; }
+
+@media (max-width: 900px) {
+  .store-product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .catalog-hero-art { right: 0; opacity: .8; }
+}
+
+@media (max-width: 650px) {
+  .catalog-page { padding-bottom: 10px; }
+  .catalog-breadcrumb { padding-block: 13px; }
+  .catalog-hero { min-height: 190px; padding: 25px 20px; border-radius: 18px; }
+  .catalog-hero h1 { font-size: 29px; }
+  .catalog-hero p { max-width: 240px; font-size: 11px; }
+  .catalog-hero-art { right: -85px; opacity: .32; }
+  .catalog-section { margin-top: 18px; padding: 18px 13px; border-radius: 18px; }
+  .catalog-heading { align-items: stretch; flex-direction: column; gap: 14px; }
+  .catalog-heading h2 { font-size: 21px; }
+  .catalog-search { width: 100%; }
+  .catalog-toolbar { align-items: flex-start; margin-top: 14px; }
+  .catalog-toolbar label { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .store-product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+  .store-product-card { padding: 8px; border-radius: 15px; }
+  .store-product-media { height: 140px; border-radius: 11px; }
+  .store-discount { padding: 5px 9px 6px; font-size: 11px; }
+  .store-product-info { padding-top: 8px; }
+  .store-product-info h3 { min-height: 40px; font-size: 14px; }
+  .store-product-description { min-height: 34px; font-size: 10px; }
+  .store-current-price { font-size: 17px; }
+  .store-buy-button { min-height: 36px; margin-top: 9px; font-size: 12px; }
+}

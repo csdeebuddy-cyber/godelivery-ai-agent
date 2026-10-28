@@ -44,6 +44,14 @@ function contentField(labelText, name, value, { type = "text", wide = false, ...
   return label;
 }
 
+function updateProductOrderButtons() {
+  const records = Array.from(siteProductList.querySelectorAll(".content-record"));
+  records.forEach((record, index) => {
+    record.querySelector('[data-action="move-up"]').disabled = index === 0;
+    record.querySelector('[data-action="move-down"]').disabled = index === records.length - 1;
+  });
+}
+
 function createContentRecord(kind, values = {}) {
   const record = document.createElement("fieldset");
   record.className = "content-record";
@@ -110,17 +118,44 @@ function createContentRecord(kind, values = {}) {
     record.append(activeLabel);
   }
 
+  if (kind === "product") {
+    const orderActions = document.createElement("div");
+    orderActions.className = "product-order-actions";
+    for (const [action, label] of [["move-up", "เลื่อนขึ้น"], ["move-down", "เลื่อนลง"]]) {
+      const moveButton = document.createElement("button");
+      moveButton.type = "button";
+      moveButton.className = "secondary-button";
+      moveButton.dataset.action = action;
+      moveButton.textContent = label;
+      moveButton.addEventListener("click", () => {
+        const sibling = action === "move-up"
+          ? record.previousElementSibling
+          : record.nextElementSibling;
+        if (!sibling) return;
+        if (action === "move-up") siteProductList.insertBefore(record, sibling);
+        else siteProductList.insertBefore(sibling, record);
+        updateProductOrderButtons();
+      });
+      orderActions.append(moveButton);
+    }
+    record.append(orderActions);
+  }
+
   const removeButton = document.createElement("button");
   removeButton.type = "button";
   removeButton.className = "secondary-button content-remove-button";
   removeButton.textContent = "ลบรายการนี้";
-  removeButton.addEventListener("click", () => record.remove());
+  removeButton.addEventListener("click", () => {
+    record.remove();
+    if (kind === "product") updateProductOrderButtons();
+  });
   record.append(removeButton);
   return record;
 }
 
 function renderContentRecords(container, kind, records) {
   container.replaceChildren(...records.map((record) => createContentRecord(kind, record)));
+  if (kind === "product") updateProductOrderButtons();
 }
 
 function readContentRecords(container, kind) {
@@ -258,6 +293,7 @@ for (const [buttonId, container, kind] of [
 ]) {
   document.querySelector(buttonId).addEventListener("click", () => {
     container.append(createContentRecord(kind));
+    if (kind === "product") updateProductOrderButtons();
     container.lastElementChild.scrollIntoView({ behavior: "smooth", block: "center" });
   });
 }
