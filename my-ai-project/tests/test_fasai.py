@@ -111,6 +111,45 @@ class ToolTests(unittest.TestCase):
         self.assertFalse(unknown["ok"])
         self.assertEqual(session.cart, {})
 
+    def test_allday_bundle_prices_and_accepted_discount(self) -> None:
+        product = {
+            "product_id": "allday-sesame",
+            "name": "ALLDAY น้ำมันงาดำสกัดเย็น ผสมคอลลาเจนไทพ์ทู",
+            "sale_price": 290,
+            "stock_quantity": 10,
+            "active": True,
+        }
+        with patch.object(fasai, "published_products", return_value={"allday-sesame": product}):
+            for quantity, expected_total in ((1, 290), (2, 690), (3, 890)):
+                session = AgentSession()
+                result, _ = run_tool(
+                    "add_to_cart",
+                    {"product_id": "allday-sesame", "quantity": quantity},
+                    session,
+                    save_callback=lambda *a, **k: None,
+                )
+                self.assertEqual(result["total"], expected_total)
+                self.assertEqual(result["cart"][0]["line_total"], expected_total)
+
+            discounted_session = AgentSession()
+            discounted, _ = run_tool(
+                "add_to_cart",
+                {"product_id": "allday-sesame", "quantity": 3, "discount_thb": 50},
+                discounted_session,
+                save_callback=lambda *a, **k: None,
+            )
+            self.assertEqual(discounted["total"], 840)
+
+            invalid_session = AgentSession()
+            invalid, _ = run_tool(
+                "add_to_cart",
+                {"product_id": "allday-sesame", "quantity": 3, "discount_thb": 51},
+                invalid_session,
+                save_callback=lambda *a, **k: None,
+            )
+            self.assertFalse(invalid["ok"])
+            self.assertEqual(invalid_session.cart, {})
+
     def test_shipping_validation(self) -> None:
         session = AgentSession()
         (bad, _), _ = self.run_tool("save_shipping_field", {"field": "postcode", "value": "123"}, session)

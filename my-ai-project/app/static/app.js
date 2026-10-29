@@ -406,14 +406,6 @@ micButton.addEventListener("click", async () => {
   }
 });
 
-languageSelect.addEventListener("change", async () => {
-  const wasConnected = liveSocket?.readyState === WebSocket.OPEN;
-  if (wasConnected) {
-    await stopLiveSession();
-    setStatus("เปลี่ยนภาษาแล้ว ส่งข้อความหรือเริ่มไมโครโฟนเพื่อเชื่อมต่อใหม่");
-  }
-});
-
 async function checkApiStatus() {
   try {
     const response = await fetch("/api/v1/health");

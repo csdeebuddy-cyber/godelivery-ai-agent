@@ -1,8 +1,8 @@
 {
   "source": {
-    "url": "https://godelivery.co.th/",
-    "retrieved_on": "2026-10-27",
-    "verification_note": "Extracted from public page structured data. It is not independently verified. Aggregate prices, stock, health claims, and unconfirmed offers are intentionally excluded."
+    "url": "Business-owner-provided product and promotion details",
+    "updated_on": "2026-10-29",
+    "verification_note": "Offer prices were provided directly by the business owner; stock remains unverified."
   },
   "products": [
     {
@@ -15,15 +15,15 @@
         "น้ำมันงาดำสกัดเย็น",
         "คอลลาเจนไทพ์ทู (Type II collagen)"
       ],
-      "short_description": "ชื่อและข้อมูลนี้คัดจาก structured data บนหน้าเว็บ; ยังไม่ได้ยืนยันกับผู้ขาย",
-      "regular_price_thb": null,
-      "promotion_price_thb": null,
-      "promotion": null,
+      "short_description": "ALLDAY น้ำมันงาดำสกัดเย็นผสมคอลลาเจนไทพ์ทู",
+      "regular_price_thb": 490,
+      "promotion_price_thb": 290,
+      "promotion": "โปร 1 กระปุก 290 บาท; 2 กระปุก 690 บาท; 3 กระปุก 890 บาท",
       "stock_status": "unknown",
-      "sales_script": "จากข้อมูลที่หน้าเว็บไซต์แสดง มีรายการ ALLDAY น้ำมันงาดำสกัดเย็น ผสมคอลลาเจน ไทพ์ ทู (Hi.P.Herb Official) ค่ะ ขณะนี้ยังไม่มีราคาหรือโปรโมชันที่ยืนยันได้ ต้องการให้ช่วยตรวจสอบกับร้านค้าก่อนไหมคะ",
-      "source_url": "https://godelivery.co.th/",
-      "source_type": "public_page_structured_data",
-      "verified": false
+      "sales_script": "โปร 1 กระปุก 290 บาท จากปกติ 490 บาท, 2 กระปุก 690 บาท จากปกติ 890 บาท, 3 กระปุก 890 บาท จากปกติ 1,290 บาท ส่งฟรี เก็บเงินปลายทางได้",
+      "source_url": "Business-owner-provided promotions",
+      "source_type": "business_owner_provided",
+      "verified": true
     }
   ]
 }

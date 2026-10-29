@@ -9,6 +9,7 @@ from google.genai import types
 
 from app.config import settings
 from app.services import address_book
+from app.services.knowledge_base import get_active_knowledge_base_promotions
 from app.services.site_content import get_site_content
 
 logger = logging.getLogger(__name__)
@@ -18,8 +19,12 @@ LISTEN_DELAY_S = 1.8
 HELLO_AFTER_S = 2.0
 HANGUP_AFTER_S = 1.0
 HELLO_REPLY_TIMEOUT_S = 6.0
+CALL_TIME_LIMIT_S = 600
+CALL_TIME_WARNING_S = 585
+CALL_ADDRESS_EXTENSION_S = 120
+CALL_CLOSE_GRACE_S = 15
 PCM_BYTES_PER_SECOND = 48000  # Gemini Live output: 24 kHz, 16-bit, mono
-GREETING_TEXT = "ออลเดย์ออย สวัสดีคะ ฟ้าใสรับสาย วันนี้มีอะไรให้ดูแลคะ"
+GREETING_TEXT = "ออลเดย์ออย สวัสดีค่ะ ฟ้าใสรับสายค่ะ สนใจงาดำออลเดย์หรือสอบถามสถานะออเดอร์คะ"
 CLOSING_TEXT = "ขอบคุณที่ใช้บริการนะคะ สวัสดีค่ะ"
 HANGUP_TEXT = "ฟ้าใสขออนุญาตวางสายค่ะ"
 HOME_URL = "/"
@@ -55,6 +60,14 @@ HELLO_PROMPT = "[ระบบ] ลูกค้าเงียบไป ให้
 HANGUP_PROMPT = (
     "[ระบบ] ลูกค้ายังเงียบอยู่ ให้พูดตรงตัวทุกคำว่า "
     f"“{HANGUP_TEXT} {CLOSING_TEXT}” แล้วหยุดพูด"
+)
+CALL_TIME_LIMIT_PROMPT = (
+    "[ระบบ] ใกล้ครบเวลาสนทนาแล้ว ให้แจ้งสั้น ๆ ว่าลูกค้าดูโปรหรือสั่งซื้อได้ที่หน้าร้าน "
+    "แล้วเรียก end_call จากนั้นพูดประโยคปิดท้ายตามที่กำหนด ห้ามถามหรือเสนอขายต่อ"
+)
+CALL_ADDRESS_EXTENSION_PROMPT = (
+    "[ระบบ] ใกล้ครบเวลาสนทนาแล้ว ข้อมูลสั่งซื้อและที่อยู่ครบ "
+    "ให้ทวนที่อยู่ที่บันทึกไว้และถามยืนยันให้จบโดยเร็ว ห้ามเริ่มหัวข้อใหม่"
 )
 
 
@@ -174,6 +187,7 @@ class AgentSession:
     shipping: dict[str, str] = field(default_factory=dict)
     order_confirmed: bool = False
     callback_logged: bool = False
+    sales_discount_thb: int = 0
 
     def add_transcript(self, role: str, text: str, at: str) -> None:
         if not text.strip():
@@ -187,17 +201,40 @@ class AgentSession:
         lines = []
         for product_id, quantity in self.cart.items():
             product = products.get(product_id, {})
-            price = product.get("sale_price") or product.get("regular_price") or 0
+            line_total = _fasai_offer_price(product, quantity)
+            if line_total is None:
+                unit_price = product.get("sale_price") or product.get("regular_price") or 0
+                line_total = unit_price * quantity
+            if self.sales_discount_thb and _is_fasai_product(product) and quantity == 3:
+                line_total -= self.sales_discount_thb
             lines.append(
                 {
                     "product_id": product_id,
                     "name": product.get("name", product_id),
                     "quantity": quantity,
-                    "unit_price": price,
-                    "line_total": price * quantity,
+                    "unit_price": round(line_total / quantity, 2),
+                    "line_total": line_total,
                 }
             )
         return lines
+
+
+def _is_fasai_product(product: dict[str, Any]) -> bool:
+    name = "".join(str(product.get("name", "")).casefold().split())
+    return "งาดำ" in name and ("คอลลาเจนไทพ์ทู" in name or "typeii" in name)
+
+
+def _fasai_offer_price(product: dict[str, Any], quantity: int) -> int | None:
+    if not _is_fasai_product(product):
+        return None
+    promotions = get_active_knowledge_base_promotions()["promotions"]
+    for promotion in promotions:
+        if (
+            "งาดำ" in str(promotion.get("product", ""))
+            and promotion.get("quantity") == quantity
+        ):
+            return int(promotion["price_thb"])
+    return None
 
 
 def published_products() -> dict[str, dict[str, Any]]:
@@ -231,12 +268,20 @@ def tool_config() -> list[types.Tool]:
             function_declarations=[
                 types.FunctionDeclaration(
                     name="add_to_cart",
-                    description="หยิบสินค้าใส่ตะกร้าให้ลูกค้าเมื่อลูกค้ายืนยันว่าจะรับสินค้า",
+                    description=(
+                        "หยิบสินค้าใส่ตะกร้าเมื่อลูกค้ายืนยันซื้อแล้ว "
+                        "กรณีลูกค้ายอมรับส่วนลดที่ได้รับอนุญาต ให้ส่ง discount_thb (ไม่เกิน 50) "
+                        "พร้อมการสั่งโปร 3 กระปุกเท่านั้น"
+                    ),
                     parameters=schema(
                         type=kind.OBJECT,
                         properties={
                             "product_id": schema(type=kind.STRING, description="รหัสสินค้าจากรายการ"),
                             "quantity": schema(type=kind.INTEGER, description="จำนวนที่ลูกค้าต้องการ"),
+                            "discount_thb": schema(
+                                type=kind.INTEGER,
+                                description="ส่วนลดเพิ่มที่ลูกค้ายอมรับแล้ว ไม่เกิน 50 บาท ใช้กับโปร 3 กระปุกเท่านั้น",
+                            ),
                         },
                         required=["product_id", "quantity"],
                     ),
@@ -331,11 +376,24 @@ def run_tool(
             return {"ok": False, "error": "ไม่พบสินค้านี้ในรายการที่เผยแพร่"}, None
         if not 1 <= quantity <= MAX_LINE_QUANTITY:
             return {"ok": False, "error": f"จำนวนต้องอยู่ระหว่าง 1 ถึง {MAX_LINE_QUANTITY}"}, None
+        if _is_fasai_product(product) and (quantity > 3 or session.cart.get(product_id, 0) + quantity > 3):
+            return {"ok": False, "error": "โปรโมชันมีตัวเลือก 1, 2 หรือ 3 กระปุกต่อคำสั่งซื้อ"}, None
+        discount = args.get("discount_thb", 0)
+        if isinstance(discount, bool) or not isinstance(discount, int) or not 0 <= discount <= 50:
+            return {"ok": False, "error": "ส่วนลดเพิ่มต้องเป็นจำนวนเต็มตั้งแต่ 0 ถึง 50 บาท"}, None
+        if discount and (
+            quantity != 3
+            or not _is_fasai_product(product)
+            or session.cart
+            or session.sales_discount_thb
+        ):
+            return {"ok": False, "error": "ส่วนลดเพิ่มใช้ได้เฉพาะโปรงาดำ 3 กระปุกและใช้ได้ครั้งเดียว"}, None
         stock = int(product.get("stock_quantity", 0))
         already = session.cart.get(product_id, 0)
         if already + quantity > stock:
             return {"ok": False, "error": f"สินค้าคงเหลือ {stock} ชิ้น"}, None
         session.cart[product_id] = already + quantity
+        session.sales_discount_thb = discount
         lines = session.cart_lines(products)
         return (
             {"ok": True, "cart": lines, "total": sum(line["line_total"] for line in lines)},
@@ -383,7 +441,8 @@ def run_tool(
         return {
             "ok": True,
             "message": (
-                "บันทึกคำสั่งซื้อแล้ว ให้แจ้งว่ารอรับสินค้าภายใน 3 วัน แล้วพูดประโยคปิดท้ายตรงตัวเป็นประโยคสุดท้าย: "
+                "บันทึกคำสั่งซื้อแล้ว ให้ยืนยันการบันทึกตามจริง ห้ามระบุวันหรือระยะเวลาจัดส่งที่ไม่มีข้อมูลยืนยัน "
+                "แล้วพูดประโยคปิดท้ายตรงตัวเป็นประโยคสุดท้าย: "
                 f"{CLOSING_TEXT} ระบบจะตัดสายเอง"
             ),
         }, {"type": "order_confirmed"}

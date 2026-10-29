@@ -1,20 +1,18 @@
 # Product FAQs
 
-Source reviewed: https://godelivery.co.th/ (public page metadata, retrieved 2026-10-27).
-
-The source page lists the product name **ALLDAY น้ำมันงาดำสกัดเย็น ผสมคอลลาเจนไทพ์ทู** and describes it as a dietary supplement. This listing has not been independently verified.
+Product and promotion details below were provided by the business owner on 2026-10-29.
 
 ## What product is listed?
 
-The public page lists an ALLDAY cold-pressed black sesame oil product with Type II collagen.
+The product is **ALLDAY น้ำมันงาดำสกัดเย็น ผสมคอลลาเจนไทพ์ทู**.
 
 ## What is the price?
 
-No single current product price could be verified from the reviewed page metadata. Do not quote a price or infer one from a price range or bundle listing. Offer to check the current seller listing.
+The current offers are 1 jar for 290 baht (regularly 490 baht), 2 jars for 690 baht (regularly 890 baht), or 3 jars for 890 baht (regularly 1,290 baht). The 3-jar offer averages about 296.67 baht per jar (about 297 baht), not 296 baht.
 
 ## Is there a current promotion?
 
-No current promotion could be verified from the reviewed source. Do not promise discounts, gifts, free delivery, or cash-on-delivery.
+All listed offers include free shipping and cash on delivery. After three declined purchase offers, Fasai may offer an additional discount of up to 50 baht on the 3-jar offer; do not exceed that amount or apply it without the customer's acceptance.
 
 ## What benefits does it have?
 

@@ -1,6 +1,37 @@
 {
-  "source": "https://godelivery.co.th/",
-  "retrieved_on": "2026-10-27",
-  "verification_note": "No independently verified active promotions were extracted.",
-  "promotions": []
+  "source": "Business-owner-provided promotions",
+  "updated_on": "2026-10-29",
+  "verification_note": "Promotions and prices were provided directly by the business owner.",
+  "promotions": [
+    {
+      "id": "allday-black-sesame-1-jar",
+      "name": "ALLDAY งาดำ 1 กระปุก",
+      "product": "ALLDAY น้ำมันงาดำสกัดเย็น ผสมคอลลาเจนไทพ์ทู",
+      "quantity": 1,
+      "price_thb": 290,
+      "regular_price_thb": 490,
+      "active": true,
+      "shipping": "ส่งฟรี เก็บเงินปลายทางได้"
+    },
+    {
+      "id": "allday-black-sesame-2-jars",
+      "name": "ALLDAY งาดำ 2 กระปุก",
+      "product": "ALLDAY น้ำมันงาดำสกัดเย็น ผสมคอลลาเจนไทพ์ทู",
+      "quantity": 2,
+      "price_thb": 690,
+      "regular_price_thb": 890,
+      "active": true,
+      "shipping": "ส่งฟรี เก็บเงินปลายทางได้"
+    },
+    {
+      "id": "allday-black-sesame-3-jars",
+      "name": "ALLDAY งาดำ 3 กระปุก",
+      "product": "ALLDAY น้ำมันงาดำสกัดเย็น ผสมคอลลาเจนไทพ์ทู",
+      "quantity": 3,
+      "price_thb": 890,
+      "regular_price_thb": 1290,
+      "active": true,
+      "shipping": "ส่งฟรี เก็บเงินปลายทางได้"
+    }
+  ]
 }

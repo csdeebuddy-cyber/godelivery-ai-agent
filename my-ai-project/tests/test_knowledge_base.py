@@ -761,26 +761,26 @@ class KnowledgeBaseTests(unittest.TestCase):
         self.assertEqual(unavailable.status_code, 503)
         self.assertEqual(unavailable.json()["detail"]["code"], "firestore_unavailable")
 
-    def test_status_reports_unverified_catalog_and_no_active_promotions(self) -> None:
+    def test_status_reports_business_verified_catalog_and_active_promotions(self) -> None:
         status = get_knowledge_base_status()
 
         self.assertEqual(status["products"], 1)
-        self.assertEqual(status["verified_products"], 0)
-        self.assertEqual(status["active_promotions"], 0)
+        self.assertEqual(status["verified_products"], 1)
+        self.assertEqual(status["active_promotions"], 3)
 
-    def test_product_price_search_does_not_invent_price(self) -> None:
+    def test_product_price_search_returns_business_provided_price(self) -> None:
         result = search_knowledge_base("ราคา ALLDAY น้ำมันงาดำ")
 
         self.assertEqual(len(result["products"]), 1)
-        self.assertIsNone(result["products"][0]["regular_price_thb"])
-        self.assertIsNone(result["products"][0]["promotion_price_thb"])
-        self.assertFalse(result["products"][0]["verified"])
+        self.assertEqual(result["products"][0]["regular_price_thb"], 490)
+        self.assertEqual(result["products"][0]["promotion_price_thb"], 290)
+        self.assertTrue(result["products"][0]["verified"])
 
-    def test_promotion_search_explicitly_reports_unverified_promotion(self) -> None:
+    def test_promotion_search_returns_business_provided_promotions(self) -> None:
         result = search_knowledge_base("มีโปรโมชันไหม")
 
-        self.assertEqual(result["promotions"], [])
-        self.assertIsNotNone(result["promotion_status"])
+        self.assertEqual([promo["price_thb"] for promo in result["promotions"]], [290, 690, 890])
+        self.assertIsNone(result["promotion_status"])
 
     def test_policy_search_returns_relevant_document(self) -> None:
         result = search_knowledge_base("ขอทราบนโยบายคืนเงิน")
@@ -792,8 +792,8 @@ class KnowledgeBaseTests(unittest.TestCase):
         context = get_knowledge_base_context()
 
         self.assertEqual(len(context["products"]), 1)
-        self.assertEqual(context["promotions"], [])
-        self.assertIsNone(context["products"][0]["regular_price_thb"])
+        self.assertEqual([promo["price_thb"] for promo in context["promotions"]], [290, 690, 890])
+        self.assertEqual(context["products"][0]["regular_price_thb"], 490)
         self.assertIn(
             "02_ordering_fulfillment/ordering.md",
             {document["source"] for document in context["documents"]},
@@ -814,6 +814,12 @@ class KnowledgeBaseTests(unittest.TestCase):
         self.assertEqual(config.realtime_input_config.automatic_activity_detection.silence_duration_ms, 1800)
         self.assertNotIn("{{", config.system_instruction)
         self.assertIn("Current local knowledge-base data", config.system_instruction)
+        self.assertIn("สนใจงาดำออลเดย์หรือสอบถามสถานะออเดอร์", config.system_instruction)
+        self.assertIn("ห้ามคุยนอกบริบท", config.system_instruction)
+        self.assertIn("โปร 3 กระปุก 890 บาท", config.system_instruction)
+        self.assertIn("เรียก `end_call` เพื่อจบสาย", config.system_instruction)
+        self.assertIn("ครบ 3 ครั้ง", config.system_instruction)
+        self.assertIn("ไม่เกิน 10 นาที", config.system_instruction)
 
     def test_knowledge_api_exposes_search_and_status(self) -> None:
         client = TestClient(app)
@@ -831,7 +837,10 @@ class KnowledgeBaseTests(unittest.TestCase):
             products_response.json()["products"],
             get_knowledge_base_context()["products"],
         )
-        self.assertEqual(promotions_response.json()["promotions"], [])
+        self.assertEqual(
+            [promo["price_thb"] for promo in promotions_response.json()["promotions"]],
+            [290, 690, 890],
+        )
         self.assertEqual(search_response.json()["products"][0]["name"], get_knowledge_base_context()["products"][0]["name"])
 
     def test_google_sheets_integration_is_explicitly_unconfigured(self) -> None:
@@ -923,7 +932,7 @@ class KnowledgeBaseTests(unittest.TestCase):
                 "status",
             ],
         )
-        self.assertEqual(get_knowledge_base_status()["active_promotions"], 0)
+        self.assertEqual(get_knowledge_base_status()["active_promotions"], 3)
 
 
 if __name__ == "__main__":

@@ -14,6 +14,12 @@ from google.genai import types
 from app.config import settings
 from app.services.fasai import (
     ASK_REPEAT_PROMPT,
+    CALL_ADDRESS_EXTENSION_PROMPT,
+    CALL_CLOSE_GRACE_S,
+    CALL_TIME_LIMIT_PROMPT,
+    CALL_TIME_LIMIT_S,
+    CALL_TIME_WARNING_S,
+    CALL_ADDRESS_EXTENSION_S,
     GREETING_PROMPT,
     HANGUP_PROMPT,
     HELLO_PROMPT,
@@ -21,6 +27,7 @@ from app.services.fasai import (
     UNANSWERED_HINT,
     WAIT_NOTICE_PROMPT,
     AgentSession,
+    SHIPPING_FIELDS,
     SilenceGuard,
     TurnWatchdog,
     build_instructions,
@@ -53,9 +60,9 @@ def _system_instruction() -> str:
     )
     promotion_instruction = (
         "ข้อเท็จจริงสำคัญ: ฐานข้อมูลไม่มีโปรโมชันที่ยืนยันว่าใช้งานอยู่ "
-        "หากลูกค้าถามหาโปร ให้พูดชัด ๆ ว่า "
-        "“ตอนนี้ยังไม่มีโปรโมชันที่ยืนยันได้ในข้อมูลที่มีค่ะ ต้องการให้ช่วยตรวจสอบกับร้านค้าไหมคะ” "
-        "ห้ามตอบเพียงชื่อสินค้าโดยไม่ตอบเรื่องโปร."
+        "หากลูกค้าถามหาโปร ให้แจ้งว่า “ตอนนี้ยังไม่มีโปรโมชันที่ยืนยันได้ค่ะ” "
+        "ห้ามเสนอส่วนลด ของแถม หรือเงื่อนไขขึ้นเอง หากลูกค้าต้องการข้อมูลเพิ่มเติม "
+        "ให้แนะนำตรวจประกาศและนโยบายบนเว็บไซต์ แล้วเรียก end_call เพื่อกลับหน้าแรก."
         if not knowledge_context["promotions"]
         else ""
     )
@@ -144,6 +151,10 @@ async def gemini_live(
     silence = SilenceGuard()
     send_lock = asyncio.Lock()
     clock = time.monotonic
+    call_started_at = clock()
+    call_time_limit_sent = False
+    address_extension_deadline: float | None = None
+    forced_close_deadline: float | None = None
     close_reason = "disconnected"
 
     async def emit(payload: dict) -> None:
@@ -291,9 +302,52 @@ async def gemini_live(
                                 raise _EndSession(agent.close_reason or "redirect", agent.pending_redirect)
 
             async def monitor() -> None:
+                nonlocal address_extension_deadline
+                nonlocal call_time_limit_sent
+                nonlocal forced_close_deadline
                 while True:
                     await asyncio.sleep(0.2)
                     now = clock()
+                    if (
+                        address_extension_deadline is not None
+                        and forced_close_deadline is not None
+                        and now >= forced_close_deadline - CALL_CLOSE_GRACE_S
+                        and not agent.pending_redirect
+                    ):
+                        agent.pending_redirect = HOME_URL
+                        agent.close_reason = "time_limit"
+                        await session.send_realtime_input(text=CALL_TIME_LIMIT_PROMPT)
+                    if forced_close_deadline is not None and now >= forced_close_deadline:
+                        raise _EndSession("time_limit", HOME_URL)
+                    if (
+                        not call_time_limit_sent
+                        and now - call_started_at >= CALL_TIME_WARNING_S
+                    ):
+                        call_time_limit_sent = True
+                        if agent.pending_redirect:
+                            forced_close_deadline = call_started_at + CALL_TIME_LIMIT_S
+                            continue
+                        if (
+                            agent.cart
+                            and not agent.order_confirmed
+                            and all(field in agent.shipping for field in SHIPPING_FIELDS)
+                        ):
+                            address_extension_deadline = (
+                                call_started_at + CALL_TIME_LIMIT_S + CALL_ADDRESS_EXTENSION_S
+                            )
+                            forced_close_deadline = address_extension_deadline
+                            await session.send_realtime_input(
+                                text=CALL_ADDRESS_EXTENSION_PROMPT
+                            )
+                            continue
+                        else:
+                            agent.pending_redirect = HOME_URL
+                            agent.close_reason = "time_limit"
+                            forced_close_deadline = call_started_at + CALL_TIME_LIMIT_S
+                            await session.send_realtime_input(text=CALL_TIME_LIMIT_PROMPT)
+                        continue
+                    if forced_close_deadline is not None:
+                        continue
                     silent_action = silence.poll(now)
                     if silent_action == "hello":
                         await session.send_realtime_input(text=HELLO_PROMPT)

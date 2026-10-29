@@ -32,19 +32,13 @@
         <div class="message assistant-message">
           <div class="avatar" aria-hidden="true">✦</div>
           <div class="bubble">
-            <p>สวัสดีครับ วันนี้อยากให้ช่วยเรื่องอะไร?</p>
-            <button class="speak-button" type="button" data-speak="สวัสดีครับ วันนี้อยากให้ช่วยเรื่องอะไร?" aria-label="อ่านคำทักทายออกเสียง">▶ ฟังเสียง</button>
+            <p>สวัสดีค่ะ สนใจงาดำออลเดย์หรือสอบถามสถานะออเดอร์คะ</p>
+            <button class="speak-button" type="button" data-speak="สวัสดีค่ะ สนใจงาดำออลเดย์หรือสอบถามสถานะออเดอร์คะ" aria-label="อ่านคำทักทายออกเสียง">▶ ฟังเสียง</button>
           </div>
         </div>
       </div>
 
-      <div class="voice-controls">
-        <label class="select-label" for="speech-language">ภาษาสนทนา</label>
-        <select id="speech-language" aria-label="เลือกภาษาสนทนา">
-          <option value="th-TH" selected>ไทย</option>
-          <option value="en-US">English (US)</option>
-        </select>
-      </div>
+      <input id="speech-language" type="hidden" value="th-TH">
 
       <form id="chat-form" class="composer">
         <label class="sr-only" for="message-input">พิมพ์ข้อความถึง AI</label>
